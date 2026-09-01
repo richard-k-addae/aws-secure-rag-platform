@@ -1,5 +1,7 @@
 package terraform.security
 
+import rego.v1
+
 # Deny resources that expose the platform publicly.
 # Run against a terraform plan JSON: conftest test tfplan.json -p policies/conftest
 

@@ -1,5 +1,7 @@
 package terraform.security
 
+import rego.v1
+
 required_tags := {"Project", "Environment", "ManagedBy"}
 
 deny contains msg if {

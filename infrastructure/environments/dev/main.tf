@@ -11,3 +11,8 @@ module "networking" {
 # module "storage"   { source = "../../modules/storage" ... }
 # module "messaging" { source = "../../modules/messaging" ... }
 # module "security"  { source = "../../modules/security" ... }
+
+module "ecr" {
+  source          = "../../modules/ecr"
+  repository_name = "aws-secure-rag-platform"
+}
