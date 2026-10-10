@@ -22,4 +22,10 @@ module "security" {
   vpc_id                 = module.networking.vpc_id
   private_subnet_ids     = module.networking.private_subnet_ids
   private_route_table_id = module.networking.private_route_table_id
+
+  ecr_repository_arn                = module.ecr.repository_arn
+  bedrock_inference_profile_id      = var.bedrock_inference_profile_id
+  bedrock_generation_model_id       = var.bedrock_generation_model_id
+  bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
+  bedrock_embedding_model_id        = var.bedrock_embedding_model_id
 }
