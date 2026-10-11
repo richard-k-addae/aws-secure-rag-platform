@@ -61,11 +61,19 @@ resource "aws_ecs_task_definition" "app" {
       user                   = "app"
       readonlyRootFilesystem = true
 
+      # The empty lists below are the defaults ECS stores. Declaring them keeps
+      # the configuration identical to the registered revision, so unrelated
+      # applies do not register a new one and redeploy the service.
       linuxParameters = {
         capabilities = {
+          add  = []
           drop = ["ALL"]
         }
       }
+
+      mountPoints    = []
+      systemControls = []
+      volumesFrom    = []
 
       portMappings = [
         {
