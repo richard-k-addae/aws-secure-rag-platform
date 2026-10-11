@@ -14,6 +14,7 @@ module "networking" {
 module "ecr" {
   source          = "../../modules/ecr"
   repository_name = "aws-secure-rag-platform"
+  environment     = var.environment
 }
 
 module "security" {
