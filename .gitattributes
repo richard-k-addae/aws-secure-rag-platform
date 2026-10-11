@@ -1,0 +1,4 @@
+# Trust material must stay byte-for-byte identical on every platform. Without
+# this, line-ending conversion on checkout would change the file and break the
+# checksum pinned in app/tests/test_rds_ca_bundle.py.
+app/certs/*.pem -text

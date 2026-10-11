@@ -24,6 +24,7 @@ from typing import Any
 import pytest
 
 psycopg = pytest.importorskip("psycopg")
+sql = psycopg.sql
 
 ADMIN_URL = os.environ.get("TEST_ADMIN_DATABASE_URL")
 APP_URL = os.environ.get("TEST_DATABASE_URL")
@@ -39,6 +40,8 @@ pytestmark = pytest.mark.skipif(
 DIMS = 4
 APP_ROLE = os.environ.get("TEST_APP_ROLE", "rag_app")
 APP_PASSWORD = os.environ.get("TEST_APP_PASSWORD", "rag_app")
+# For roles these tests create and drop themselves; never a real credential.
+THROWAWAY_PASSWORD = os.environ.get("TEST_THROWAWAY_PASSWORD", "throwaway-test-only")
 
 
 def vec(values: list[float]) -> str:
@@ -111,6 +114,116 @@ def test_runtime_role_is_not_the_table_owner() -> None:
         row = cur.fetchone()
     assert row is not None
     assert row[0] is True
+
+
+# --- bootstrap is safe to re-run and fails closed ----------------------------
+
+
+def _role_attributes(role: str) -> tuple[bool, bool, bool, bool] | None:
+    with psycopg.connect(ADMIN_URL or "") as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT rolsuper, rolbypassrls, rolcreatedb, rolcreaterole "
+            "FROM pg_roles WHERE rolname = %s",
+            (role,),
+        )
+        row = cur.fetchone()
+    return None if row is None else (bool(row[0]), bool(row[1]), bool(row[2]), bool(row[3]))
+
+
+def test_initialize_schema_is_safe_to_rerun() -> None:
+    from app.rag.schema import initialize_schema
+
+    for _ in range(2):
+        initialize_schema(
+            ADMIN_URL or "", dimensions=DIMS, app_role=APP_ROLE, app_password=APP_PASSWORD
+        )
+
+    assert _role_attributes(APP_ROLE) == (False, False, False, False)
+    with psycopg.connect(ADMIN_URL or "") as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = %s",
+            ("document_chunks",),
+        )
+        assert cur.fetchone() == (True, True)
+
+
+def test_initialize_schema_rejects_overprivileged_runtime_role() -> None:
+    """An existing role that could escape row security gets no grant at all."""
+    from app.rag.schema import RuntimeRoleOverprivilegedError, initialize_schema
+
+    role = "rag_overprivileged_test"
+    with psycopg.connect(ADMIN_URL or "", autocommit=True) as conn:
+        conn.execute(f"DROP ROLE IF EXISTS {role}")
+        conn.execute(
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} BYPASSRLS").format(
+                sql.Identifier(role), sql.Literal(THROWAWAY_PASSWORD)
+            )
+        )
+    try:
+        with pytest.raises(RuntimeRoleOverprivilegedError, match="rolbypassrls"):
+            initialize_schema(
+                ADMIN_URL or "", dimensions=DIMS, app_role=role, app_password=THROWAWAY_PASSWORD
+            )
+        with psycopg.connect(ADMIN_URL or "") as conn, conn.cursor() as cur:
+            cur.execute("SELECT has_table_privilege(%s, 'document_chunks', 'SELECT')", (role,))
+            row = cur.fetchone()
+        assert row is not None
+        assert row[0] is False
+        # Validated, not silently repaired.
+        assert _role_attributes(role) == (False, True, False, False)
+    finally:
+        with psycopg.connect(ADMIN_URL or "", autocommit=True) as conn:
+            conn.execute(f"DROP ROLE IF EXISTS {role}")
+
+
+def test_bootstrap_reruns_under_a_non_superuser_admin() -> None:
+    """Mirrors Amazon RDS, where the master user is not a PostgreSQL superuser.
+
+    A second run must not need superuser-only statements such as
+    ALTER ROLE ... NOSUPERUSER.
+
+    The extension is installed by the superuser first: RDS lets its master
+    user create pgvector, stock PostgreSQL does not, and that one difference
+    is not what this test is about.
+    """
+    from psycopg.conninfo import make_conninfo
+
+    from app.rag.schema import initialize_schema
+
+    admin, runtime, database = "rag_rdslike_admin", "rag_rdslike_app", "rag_rdslike_test"
+
+    def drop_all() -> None:
+        with psycopg.connect(ADMIN_URL or "", autocommit=True) as conn:
+            conn.execute(f"DROP DATABASE IF EXISTS {database} WITH (FORCE)")
+            conn.execute(f"DROP ROLE IF EXISTS {runtime}")
+            conn.execute(f"DROP ROLE IF EXISTS {admin}")
+
+    drop_all()
+    with psycopg.connect(ADMIN_URL or "", autocommit=True) as conn:
+        conn.execute(
+            sql.SQL("CREATE ROLE {} LOGIN PASSWORD {} NOSUPERUSER CREATEROLE CREATEDB").format(
+                sql.Identifier(admin), sql.Literal(THROWAWAY_PASSWORD)
+            )
+        )
+        conn.execute(f"CREATE DATABASE {database} OWNER {admin}")
+    try:
+        with psycopg.connect(
+            make_conninfo(ADMIN_URL or "", dbname=database), autocommit=True
+        ) as conn:
+            conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        admin_conninfo = make_conninfo(
+            ADMIN_URL or "", user=admin, password=THROWAWAY_PASSWORD, dbname=database
+        )
+        for _ in range(2):
+            initialize_schema(
+                admin_conninfo,
+                dimensions=DIMS,
+                app_role=runtime,
+                app_password=THROWAWAY_PASSWORD,
+            )
+        assert _role_attributes(runtime) == (False, False, False, False)
+    finally:
+        drop_all()
 
 
 # --- application-layer filtering -------------------------------------------
