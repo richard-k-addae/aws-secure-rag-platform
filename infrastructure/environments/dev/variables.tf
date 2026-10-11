@@ -39,3 +39,9 @@ variable "bedrock_embedding_model_id" {
   type        = string
   default     = "amazon.titan-embed-text-v2:0"
 }
+
+variable "app_image_digest" {
+  description = "Digest of the signed release candidate image deployed to ECS (commit 2b28877)"
+  type        = string
+  default     = "sha256:ad84796c69fb4f480b89fe8e6b9081c3c0755ab9f248e2e4a4b24d08d8d7340a"
+}

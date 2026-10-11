@@ -6,7 +6,6 @@ module "networking" {
 
 # Phase 2:
 # module "rds"       { source = "../../modules/rds" ... }
-# module "ecs"       { source = "../../modules/ecs" ... }
 # module "cognito"   { source = "../../modules/cognito" ... }
 # module "storage"   { source = "../../modules/storage" ... }
 # module "messaging" { source = "../../modules/messaging" ... }
@@ -25,6 +24,23 @@ module "security" {
   private_route_table_id = module.networking.private_route_table_id
 
   ecr_repository_arn                = module.ecr.repository_arn
+  bedrock_inference_profile_id      = var.bedrock_inference_profile_id
+  bedrock_generation_model_id       = var.bedrock_generation_model_id
+  bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
+  bedrock_embedding_model_id        = var.bedrock_embedding_model_id
+}
+
+module "ecs" {
+  source      = "../../modules/ecs"
+  environment = var.environment
+
+  private_subnet_ids    = module.networking.private_subnet_ids
+  ecs_security_group_id = module.security.ecs_security_group_id
+
+  ecr_repository_arn = module.ecr.repository_arn
+  ecr_repository_url = module.ecr.repository_url
+  image_digest       = var.app_image_digest
+
   bedrock_inference_profile_id      = var.bedrock_inference_profile_id
   bedrock_generation_model_id       = var.bedrock_generation_model_id
   bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
