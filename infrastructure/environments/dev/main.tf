@@ -5,7 +5,6 @@ module "networking" {
 }
 
 # Phase 2:
-# module "rds"       { source = "../../modules/rds" ... }
 # module "cognito"   { source = "../../modules/cognito" ... }
 # module "storage"   { source = "../../modules/storage" ... }
 # module "messaging" { source = "../../modules/messaging" ... }
@@ -45,4 +44,13 @@ module "ecs" {
   bedrock_generation_model_id       = var.bedrock_generation_model_id
   bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
   bedrock_embedding_model_id        = var.bedrock_embedding_model_id
+}
+
+module "rds" {
+  source      = "../../modules/rds"
+  environment = var.environment
+
+  vpc_id                = module.networking.vpc_id
+  private_subnet_ids    = module.networking.private_subnet_ids
+  ecs_security_group_id = module.security.ecs_security_group_id
 }

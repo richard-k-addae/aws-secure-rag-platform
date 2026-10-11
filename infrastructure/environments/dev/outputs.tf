@@ -32,3 +32,20 @@ output "app_log_group_name" {
   description = "Name of the application log group"
   value       = module.ecs.log_group_name
 }
+
+output "db_endpoint_address" {
+  description = "Hostname of the PostgreSQL instance (resolvable only inside the VPC)"
+  value       = module.rds.endpoint_address
+}
+
+# The ARN only. The secret value is never read by Terraform.
+output "db_master_user_secret_arn" {
+  description = "ARN of the RDS-managed master credential secret (bootstrap and migrations only)"
+  value       = module.rds.master_user_secret_arn
+}
+
+# The ARN only. Terraform never creates or reads a version of this secret.
+output "db_runtime_secret_arn" {
+  description = "ARN of the empty secret that will hold the rag_app runtime DATABASE_URL"
+  value       = module.rds.runtime_secret_arn
+}
