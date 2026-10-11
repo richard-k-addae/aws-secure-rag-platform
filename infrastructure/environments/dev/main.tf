@@ -44,6 +44,14 @@ module "ecs" {
   bedrock_generation_model_id       = var.bedrock_generation_model_id
   bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
   bedrock_embedding_model_id        = var.bedrock_embedding_model_id
+
+  db_bootstrap_image_digest = var.db_bootstrap_image_digest
+  db_host                   = module.rds.endpoint_address
+  db_port                   = module.rds.port
+  db_name                   = module.rds.db_name
+  db_master_secret_arn      = module.rds.master_user_secret_arn
+  db_runtime_secret_arn     = module.rds.runtime_secret_arn
+  db_kms_key_arn            = module.rds.kms_key_arn
 }
 
 module "rds" {

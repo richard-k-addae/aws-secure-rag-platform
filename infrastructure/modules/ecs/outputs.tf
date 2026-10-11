@@ -17,3 +17,8 @@ output "log_group_name" {
   description = "Name of the application log group"
   value       = aws_cloudwatch_log_group.app.name
 }
+
+output "db_bootstrap_task_definition_arn" {
+  description = "ARN of the one-shot database bootstrap task definition revision"
+  value       = aws_ecs_task_definition.db_bootstrap.arn
+}

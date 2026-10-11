@@ -82,3 +82,55 @@ variable "log_retention_days" {
   type        = number
   default     = 365
 }
+
+variable "db_bootstrap_image_digest" {
+  description = "Immutable sha256 digest of the signed image used by the one-shot database bootstrap task"
+  type        = string
+
+  validation {
+    condition     = can(regex("^sha256:[0-9a-f]{64}$", var.db_bootstrap_image_digest))
+    error_message = "db_bootstrap_image_digest must be a full sha256 digest (sha256:<64 hex characters>), not a tag."
+  }
+}
+
+variable "db_host" {
+  description = "Hostname of the PostgreSQL instance"
+  type        = string
+}
+
+variable "db_port" {
+  description = "PostgreSQL port"
+  type        = number
+}
+
+variable "db_name" {
+  description = "Name of the application database"
+  type        = string
+}
+
+variable "db_app_role" {
+  description = "Name of the least-privilege runtime database role"
+  type        = string
+  default     = "rag_app"
+}
+
+variable "embedding_dimensions" {
+  description = "Dimension of the embedding column, matching the embedding model"
+  type        = number
+  default     = 1024
+}
+
+variable "db_master_secret_arn" {
+  description = "ARN of the RDS-managed master secret. Readable by the bootstrap task role only"
+  type        = string
+}
+
+variable "db_runtime_secret_arn" {
+  description = "ARN of the rag_app runtime secret"
+  type        = string
+}
+
+variable "db_kms_key_arn" {
+  description = "ARN of the KMS key that encrypts both database secrets"
+  type        = string
+}

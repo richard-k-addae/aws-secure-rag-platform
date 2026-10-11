@@ -2,3 +2,7 @@
 # this, line-ending conversion on checkout would change the file and break the
 # checksum pinned in app/tests/test_rds_ca_bundle.py.
 app/certs/*.pem -text
+
+# Embedded verbatim as an ECS container command, so its bytes must not vary
+# by platform.
+infrastructure/modules/ecs/files/*.py text eol=lf

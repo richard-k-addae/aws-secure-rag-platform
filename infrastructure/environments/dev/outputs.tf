@@ -49,3 +49,8 @@ output "db_runtime_secret_arn" {
   description = "ARN of the empty secret that will hold the rag_app runtime DATABASE_URL"
   value       = module.rds.runtime_secret_arn
 }
+
+output "db_bootstrap_task_definition_arn" {
+  description = "ARN of the one-shot database bootstrap task definition revision"
+  value       = module.ecs.db_bootstrap_task_definition_arn
+}

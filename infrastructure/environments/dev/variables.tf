@@ -45,3 +45,9 @@ variable "app_image_digest" {
   type        = string
   default     = "sha256:ad84796c69fb4f480b89fe8e6b9081c3c0755ab9f248e2e4a4b24d08d8d7340a"
 }
+
+variable "db_bootstrap_image_digest" {
+  description = "Digest of the signed image used by the database bootstrap task (commit 1194012)"
+  type        = string
+  default     = "sha256:05c5ef1b3f3350804f57680c996737c896e31fe39394de6008d16dfe5d7d6a44"
+}
