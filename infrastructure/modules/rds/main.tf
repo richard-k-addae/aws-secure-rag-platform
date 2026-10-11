@@ -64,9 +64,13 @@ resource "aws_db_parameter_group" "this" {
   family      = "postgres16"
   description = "Parameters for the ${local.name} PostgreSQL instance"
 
+  # 1 is also the engine default for PostgreSQL 16, so RDS does not record it
+  # as a user change and reports apply_method "pending-reboot". Declaring that
+  # here keeps the setting pinned without a permanent Terraform diff.
   parameter {
-    name  = "rds.force_ssl"
-    value = "1"
+    name         = "rds.force_ssl"
+    value        = "1"
+    apply_method = "pending-reboot"
   }
 
   parameter {
