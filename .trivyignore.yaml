@@ -1,56 +1,32 @@
 vulnerabilities:
-  - id: CVE-2026-53615
-    expired_at: 2026-09-05
-    statement: No Debian 12 fix is currently available; temporary acceptance for the non-root runtime image. Reassess within 30 days.
+  - id: CVE-2025-69720
+    expired_at: 2026-11-09
+    statement: "Packages: libncursesw6, libtinfo6, ncurses-base, ncurses-bin. No fixed Debian 13 package is currently available. Local buffer overflow that needs a user to process crafted terminal data; the container runs one non-interactive service with no terminal sessions. Depends on: non-root user (limits impact if reached)."
 
-  - id: CVE-2026-41992
-    expired_at: 2026-09-05
-    statement: Debian marks remediation as deferred; temporary acceptance pending a patched base image.
+  - id: CVE-2026-16742
+    expired_at: 2026-11-09
+    statement: "Packages: libsystemd0, libudev1. No fixed Debian 13 package is currently available. The flaw is in the systemd-homed service, which is not installed or running in the image; only the shared libraries are present. Does not depend on a runtime mitigation."
 
   - id: CVE-2026-54369
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
+    expired_at: 2026-11-09
+    statement: "Packages: libacl1. No fixed Debian 13 package is currently available. Local symlink-traversal privilege escalation that needs a privileged process using libacl on attacker-controlled paths; no such process runs in the container. Depends on: non-root user, read-only root filesystem, no privileged mode."
 
-  - id: CVE-2025-69720
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
+  - id: CVE-2026-76642
+    expired_at: 2026-11-09
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in privileged mount post-hooks; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
 
-  - id: CVE-2025-7458
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
+  - id: CVE-2026-78408
+    expired_at: 2026-11-09
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in nsenter --join-cgroup, which needs privileges to enter namespaces that the task will not have; the application never runs nsenter. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
 
-  - id: CVE-2026-13221
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
+  - id: CVE-2026-78409
+    expired_at: 2026-11-09
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in the X-mount.subdir mount option; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
 
-  - id: CVE-2026-42496
-    expired_at: 2026-09-05
-    statement: Debian marks remediation as deferred; temporary acceptance pending a patched base image.
-
-  - id: CVE-2026-57433
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
-
-  - id: CVE-2026-8376
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
-
-  - id: CVE-2026-42497
-    expired_at: 2026-09-05
-    statement: Debian marks remediation as deferred; temporary acceptance pending a patched base image.
-
-  - id: CVE-2026-48962
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
-
-  - id: CVE-2026-57432
-    expired_at: 2026-09-05
-    statement: No Debian 12 fixed package is currently available; temporary acceptance pending vendor remediation.
+  - id: CVE-2026-78410
+    expired_at: 2026-11-09
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in restricted bind mounts; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
 
   - id: CVE-2026-9538
-    expired_at: 2026-09-05
-    statement: Debian marks remediation as deferred; temporary acceptance pending a patched base image.
-
-  - id: CVE-2023-45853
-    expired_at: 2026-09-05
-    statement: Debian marks this finding as will-not-fix; temporary acceptance requires monthly reassessment.
+    expired_at: 2026-11-09
+    statement: "Packages: perl-base. Debian 13 marks the fix as deferred; no fixed package is currently available. Denial of service when Perl's Archive::Tar parses a crafted archive; the application is Python and never invokes Perl. Does not depend on a runtime mitigation."
