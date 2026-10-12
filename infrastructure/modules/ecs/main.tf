@@ -49,6 +49,11 @@ resource "aws_ecs_task_definition" "app" {
     cpu_architecture        = "X86_64"
   }
 
+  # Keep superseded revisions registered and register the new one first. The
+  # deployment circuit breaker rolls back to the previous revision, so that
+  # revision must still exist while a new one is being deployed.
+  skip_destroy = true
+
   # No volumes, no sidecars. Privileged mode is not available on Fargate, so
   # the flag is left unset. ADMIN_DATABASE_URL and DATABASE_URL are
   # deliberately absent: /healthz needs no database.
