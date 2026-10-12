@@ -9,6 +9,7 @@ from app.auth.permissions import Action
 from app.auth.tenancy import TenantContext, require
 from app.clients.bedrock import BedrockService, PromptTooLargeError
 from app.core.security import sanitize_text
+from app.core.telemetry import record_security_event
 from app.models.requests import GenerateRequest, QueryRequest
 from app.models.responses import GenerateResponse, QueryResponse
 from app.rag.service import RagService
@@ -32,6 +33,7 @@ def query(
     try:
         return service.query(question, context=context, top_k=body.top_k)
     except PromptTooLargeError as exc:
+        record_security_event("prompt_too_large", role=context.role.value)
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except psycopg.OperationalError as exc:
         # Fail closed: no retrieval means no answer - never fall back to model memory.
@@ -59,5 +61,6 @@ def generate(
     try:
         result = service.invoke(sanitize_text(body.prompt))
     except PromptTooLargeError as exc:
+        record_security_event("prompt_too_large", role=context.role.value)
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     return GenerateResponse(**result.__dict__)

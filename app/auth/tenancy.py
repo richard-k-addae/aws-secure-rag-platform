@@ -19,6 +19,7 @@ from app.auth.permissions import (
     is_allowed,
 )
 from app.core.config import Settings, get_settings
+from app.core.telemetry import record_security_event
 
 
 @dataclass(frozen=True)
@@ -38,12 +39,15 @@ def resolve_tenant_context(
 ) -> TenantContext:
     """Resolve and validate caller identity, or fail closed."""
     if not x_tenant_id:
+        record_security_event("missing_tenant")
         raise HTTPException(status_code=401, detail="Missing tenant context")
     if x_tenant_id not in settings.tenant_allowlist_values:
+        record_security_event("unknown_tenant")
         raise HTTPException(status_code=403, detail="Unknown tenant")
     try:
         role = Role(x_tenant_role or settings.default_tenant_role)
     except ValueError as exc:
+        record_security_event("unknown_role")
         raise HTTPException(status_code=403, detail="Unknown role") from exc
     return TenantContext(
         tenant_id=x_tenant_id,
@@ -59,6 +63,7 @@ def require(action: Action) -> object:
         context: Annotated[TenantContext, Depends(resolve_tenant_context)],
     ) -> TenantContext:
         if not context.may(action):
+            record_security_event("action_denied", role=context.role.value)
             raise HTTPException(
                 status_code=403,
                 detail=f"Role '{context.role.value}' may not perform '{action.value}'",

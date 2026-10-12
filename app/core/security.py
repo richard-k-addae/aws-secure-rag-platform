@@ -6,12 +6,17 @@ evaluation suite in evaluations/security/.
 """
 import re
 
+from app.core.telemetry import record_security_event
+
 CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def sanitize_text(text: str) -> str:
     """Strip control characters that can hide instructions from log review."""
-    return CONTROL_CHARS.sub("", text)
+    sanitized = CONTROL_CHARS.sub("", text)
+    if sanitized != text:
+        record_security_event("input_sanitized")
+    return sanitized
 
 
 def exceeds_limit(text: str, max_chars: int) -> bool:

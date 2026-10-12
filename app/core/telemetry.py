@@ -22,6 +22,7 @@ identifiers and raw exception messages must never appear in telemetry.
 """
 import os
 from collections.abc import Sequence
+from typing import Any
 
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import FastAPI
@@ -133,11 +134,19 @@ def record_error(span: Span, exc: BaseException) -> str:
 # document- or request-scoped, and anything that carries content or SQL.
 SAFE_SPAN_ATTRIBUTES = frozenset(
     {
+        "classification",
+        "chunk_count",
         "error.type",
         "http.request.method",
         "http.response.status_code",
         "http.route",
+        "model",
         "network.protocol.version",
+        "operation",
+        "outcome",
+        "result_count",
+        "role",
+        "token.type",
         "url.scheme",
     }
 )
@@ -209,7 +218,114 @@ METRIC_VIEWS: tuple[View, ...] = (
     View(instrument_name="http.server.active_requests", aggregation=DropAggregation()),
     View(instrument_name="http.server.request.body.size", aggregation=DropAggregation()),
     View(instrument_name="http.server.response.body.size", aggregation=DropAggregation()),
+    View(
+        instrument_name="rag.query.duration",
+        attribute_keys={"error.type", "outcome", "role"},
+    ),
+    View(
+        instrument_name="rag.query.retrieved_chunks",
+        attribute_keys={"error.type", "outcome", "role"},
+    ),
+    View(
+        instrument_name="gen_ai.client.operation.duration",
+        attribute_keys={"error.type", "model", "operation", "outcome"},
+    ),
+    View(
+        instrument_name="gen_ai.client.token.usage",
+        attribute_keys={"error.type", "model", "operation", "outcome", "token.type"},
+    ),
+    View(
+        instrument_name="rag.retrieval.duration",
+        attribute_keys={"error.type", "operation", "outcome"},
+    ),
+    View(
+        instrument_name="rag.retrieval.results",
+        attribute_keys={"error.type", "operation", "outcome"},
+    ),
+    View(
+        instrument_name="db.client.operation.duration",
+        attribute_keys={"error.type", "operation", "outcome"},
+    ),
+    View(
+        instrument_name="rag.ingest.duration",
+        attribute_keys={"classification", "error.type", "outcome"},
+    ),
+    View(
+        instrument_name="rag.ingest.chunks",
+        attribute_keys={"classification", "error.type", "outcome"},
+    ),
+    View(
+        instrument_name="rag.security.events",
+        attribute_keys={"classification", "event", "role"},
+    ),
 )
+
+
+class _TracerProxy:
+    def start_as_current_span(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        return trace.get_tracer("app").start_as_current_span(name, *args, **kwargs)
+
+
+TRACER = _TracerProxy()
+
+
+class _Histogram:
+    def __init__(self, name: str, unit: str = "") -> None:
+        self._name = name
+        self._unit = unit
+
+    def record(self, value: float, attributes: dict[str, str]) -> None:
+        metrics.get_meter("app").create_histogram(self._name, unit=self._unit).record(
+            value, attributes
+        )
+
+
+class _Counter:
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def add(self, value: int, attributes: dict[str, str]) -> None:
+        metrics.get_meter("app").create_counter(self._name).add(value, attributes)
+
+
+RAG_QUERY_DURATION = _Histogram("rag.query.duration", unit="s")
+RAG_QUERY_RETRIEVED_CHUNKS = _Histogram("rag.query.retrieved_chunks")
+GEN_AI_OPERATION_DURATION = _Histogram("gen_ai.client.operation.duration", unit="s")
+GEN_AI_TOKEN_USAGE = _Histogram("gen_ai.client.token.usage")
+RAG_RETRIEVAL_DURATION = _Histogram("rag.retrieval.duration", unit="s")
+RAG_RETRIEVAL_RESULTS = _Histogram("rag.retrieval.results")
+DB_OPERATION_DURATION = _Histogram("db.client.operation.duration", unit="s")
+RAG_INGEST_DURATION = _Histogram("rag.ingest.duration", unit="s")
+RAG_INGEST_CHUNKS = _Histogram("rag.ingest.chunks")
+SECURITY_EVENTS = _Counter("rag.security.events")
+
+SECURITY_EVENT_NAMES = frozenset(
+    {
+        "missing_tenant",
+        "unknown_tenant",
+        "unknown_role",
+        "action_denied",
+        "classification_denied",
+        "path_rejected",
+        "prompt_too_large",
+        "input_sanitized",
+        "rls_violation",
+    }
+)
+
+
+def record_security_event(
+    event: str, *, role: str | None = None, classification: str | None = None
+) -> None:
+    """Record a fixed-name security event without identity or request data."""
+    if event not in SECURITY_EVENT_NAMES:
+        raise ValueError("unknown security event")
+    attributes: dict[str, str] = {"event": event}
+    if role is not None:
+        attributes["role"] = role
+    if classification is not None:
+        attributes["classification"] = classification
+    SECURITY_EVENTS.add(1, attributes)
 
 
 # --- setup ----------------------------------------------------------------------
