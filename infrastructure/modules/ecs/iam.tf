@@ -41,9 +41,10 @@ resource "aws_iam_role_policy" "execution" {
   name = "${local.name}-ecs-execution"
   role = aws_iam_role.execution.id
 
-  # No Secrets Manager access: the task definition references no secrets yet.
-  # No KMS access: log encryption is done by the CloudWatch Logs service
-  # principal, which the app log key policy authorizes for this log group.
+  # Secrets: only the rag_app runtime secret that the task definition injects
+  # as DATABASE_URL, never the master secret. KMS: only to let Secrets Manager
+  # decrypt that secret. Log encryption needs no KMS access here; it is done
+  # by the CloudWatch Logs service principal under the app log key policy.
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -73,6 +74,24 @@ resource "aws_iam_role_policy" "execution" {
           "logs:PutLogEvents",
         ]
         Resource = "${aws_cloudwatch_log_group.app.arn}:*"
+      },
+      {
+        Sid      = "ReadRuntimeDatabaseSecretOnly"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = var.db_runtime_secret_arn
+      },
+      {
+        # Required because the secret uses a customer-managed key.
+        Sid      = "DecryptRuntimeSecretViaSecretsManagerOnly"
+        Effect   = "Allow"
+        Action   = "kms:Decrypt"
+        Resource = var.db_kms_key_arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${local.region}.amazonaws.com"
+          }
+        }
       },
     ]
   })

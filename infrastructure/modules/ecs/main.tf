@@ -54,9 +54,14 @@ resource "aws_ecs_task_definition" "app" {
   # revision must still exist while a new one is being deployed.
   skip_destroy = true
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   # No volumes, no sidecars. Privileged mode is not available on Fargate, so
-  # the flag is left unset. ADMIN_DATABASE_URL and DATABASE_URL are
-  # deliberately absent: /healthz needs no database.
+  # the flag is left unset. The only secret is DATABASE_URL for the
+  # least-privilege rag_app role; ADMIN_DATABASE_URL and the master
+  # credentials are never given to this task.
   container_definitions = jsonencode([
     {
       name      = local.container_name
@@ -94,6 +99,15 @@ resource "aws_ecs_task_definition" "app" {
         { name = "BEDROCK_MODEL_ID", value = var.bedrock_inference_profile_id },
         { name = "EMBEDDING_MODEL_ID", value = var.bedrock_embedding_model_id },
         { name = "LOG_FULL_CONTENT", value = "false" },
+      ]
+
+      # One JSON key of the runtime secret, resolved by ECS at task start
+      # with the execution role. The value never appears in Terraform.
+      secrets = [
+        {
+          name      = "DATABASE_URL"
+          valueFrom = "${var.db_runtime_secret_arn}:DATABASE_URL::"
+        },
       ]
 
       healthCheck = {
