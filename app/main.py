@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api.routes import documents, health, query
 from app.core.logging import configure_logging
+from app.core.telemetry import configure_telemetry
 
 configure_logging()
 
@@ -20,3 +21,6 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(query.router, prefix="/v1")
 app.include_router(documents.router, prefix="/v1")
+
+# A no-op unless an OTLP endpoint is configured in the environment.
+configure_telemetry(app)
