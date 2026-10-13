@@ -21,6 +21,8 @@ locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
 
+  ecr_allowed_repositories = compact([var.ecr_repository_arn, var.adot_ecr_repository_arn])
+
   # Endpoint policies cap what any caller in the VPC can do through an
   # endpoint. They do not grant access: IAM roles still need their own allows.
   same_account_only = {
@@ -51,7 +53,7 @@ locals {
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer",
         ]
-        Resource  = var.ecr_repository_arn
+        Resource  = local.ecr_allowed_repositories
         Condition = local.same_account_only
       },
     ]

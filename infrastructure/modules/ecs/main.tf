@@ -58,76 +58,151 @@ resource "aws_ecs_task_definition" "app" {
     create_before_destroy = true
   }
 
-  # No volumes, no sidecars. Privileged mode is not available on Fargate, so
-  # the flag is left unset. The only secret is DATABASE_URL for the
-  # least-privilege rag_app role; ADMIN_DATABASE_URL and the master
-  # credentials are never given to this task.
-  container_definitions = jsonencode([
-    {
-      name      = local.container_name
-      image     = local.image
-      essential = true
+  # No volumes. Privileged mode is not available on Fargate, so the flag is left unset.
+  # The only secret is DATABASE_URL for the least-privilege rag_app role; ADMIN_DATABASE_URL
+  # and the master credentials are never given to this task.
+  container_definitions = jsonencode(concat(
+    [
+      {
+        name      = local.container_name
+        image     = local.image
+        essential = true
 
-      user                   = "app"
-      readonlyRootFilesystem = true
+        user                   = "app"
+        readonlyRootFilesystem = true
 
-      # The empty lists below are the defaults ECS stores. Declaring them keeps
-      # the configuration identical to the registered revision, so unrelated
-      # applies do not register a new one and redeploy the service.
-      linuxParameters = {
-        capabilities = {
-          add  = []
-          drop = ["ALL"]
+        # The empty lists below are the defaults ECS stores. Declaring them keeps
+        # the configuration identical to the registered revision, so unrelated
+        # applies do not register a new one and redeploy the service.
+        linuxParameters = {
+          capabilities = {
+            add  = []
+            drop = ["ALL"]
+          }
+        }
+
+        mountPoints       = []
+        systemControls    = []
+        volumesFrom       = []
+        cpu               = var.enable_adot_sidecar ? 384 : var.task_cpu
+        memoryReservation = 1536
+
+        portMappings = [
+          {
+            containerPort = var.app_port
+            hostPort      = var.app_port
+            protocol      = "tcp"
+          }
+        ]
+
+        dependsOn = var.enable_adot_sidecar ? [
+          {
+            containerName = "aws-otel-collector"
+            condition     = "START"
+          }
+        ] : []
+
+        environment = concat(
+          [
+            { name = "APP_ENV", value = var.environment },
+            { name = "AWS_REGION", value = local.region },
+            { name = "BEDROCK_MODEL_ID", value = var.bedrock_inference_profile_id },
+            { name = "EMBEDDING_MODEL_ID", value = var.bedrock_embedding_model_id },
+            { name = "LOG_FULL_CONTENT", value = "false" },
+          ],
+          var.enable_adot_sidecar ? [
+            { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4318" },
+            { name = "OTEL_METRIC_EXPORT_INTERVAL", value = "15000" },
+          ] : []
+        )
+
+        # One JSON key of the runtime secret, resolved by ECS at task start
+        # with the execution role. The value never appears in Terraform.
+        secrets = [
+          {
+            name      = "DATABASE_URL"
+            valueFrom = "${var.db_runtime_secret_arn}:DATABASE_URL::"
+          },
+        ]
+
+        healthCheck = {
+          command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${var.app_port}/healthz')\""]
+          interval    = 30
+          timeout     = 5
+          retries     = 3
+          startPeriod = 30
+        }
+
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            "awslogs-group"         = aws_cloudwatch_log_group.app.name
+            "awslogs-region"        = local.region
+            "awslogs-stream-prefix" = local.container_name
+          }
         }
       }
+    ],
+    var.enable_adot_sidecar ? [
+      {
+        name      = "aws-otel-collector"
+        image     = "${var.adot_ecr_repository_url}@${var.adot_image_digest}"
+        essential = true
 
-      mountPoints    = []
-      systemControls = []
-      volumesFrom    = []
+        user                   = "aoc"
+        readonlyRootFilesystem = true
 
-      portMappings = [
-        {
-          containerPort = var.app_port
-          hostPort      = var.app_port
-          protocol      = "tcp"
+        linuxParameters = {
+          capabilities = {
+            add  = []
+            drop = ["ALL"]
+          }
         }
-      ]
 
-      environment = [
-        { name = "APP_ENV", value = var.environment },
-        { name = "AWS_REGION", value = local.region },
-        { name = "BEDROCK_MODEL_ID", value = var.bedrock_inference_profile_id },
-        { name = "EMBEDDING_MODEL_ID", value = var.bedrock_embedding_model_id },
-        { name = "LOG_FULL_CONTENT", value = "false" },
-      ]
+        mountPoints       = []
+        systemControls    = []
+        volumesFrom       = []
+        cpu               = 128
+        memory            = 512
+        memoryReservation = 256
 
-      # One JSON key of the runtime secret, resolved by ECS at task start
-      # with the execution role. The value never appears in Terraform.
-      secrets = [
-        {
-          name      = "DATABASE_URL"
-          valueFrom = "${var.db_runtime_secret_arn}:DATABASE_URL::"
-        },
-      ]
+        portMappings = [
+          {
+            containerPort = 4318
+            hostPort      = 4318
+            protocol      = "tcp"
+          },
+          {
+            containerPort = 13133
+            hostPort      = 13133
+            protocol      = "tcp"
+          }
+        ]
 
-      healthCheck = {
-        command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${var.app_port}/healthz')\""]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 30
-      }
+        environment = [
+          { name = "AWS_REGION", value = local.region },
+          { name = "AOT_CONFIG_CONTENT", value = var.adot_config_content }
+        ]
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.app.name
-          "awslogs-region"        = local.region
-          "awslogs-stream-prefix" = local.container_name
+        healthCheck = {
+          command     = ["/healthcheck"]
+          interval    = 30
+          timeout     = 5
+          retries     = 3
+          startPeriod = 15
+        }
+
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            "awslogs-group"         = aws_cloudwatch_log_group.app.name
+            "awslogs-region"        = local.region
+            "awslogs-stream-prefix" = "collector"
+          }
         }
       }
-    }
-  ])
+    ] : []
+  ))
 
   tags = {
     Name = "${local.name}-app"

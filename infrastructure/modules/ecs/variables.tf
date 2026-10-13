@@ -68,13 +68,54 @@ variable "task_cpu" {
 variable "task_memory" {
   description = "Fargate task memory in MiB"
   type        = number
-  default     = 1024
+  default     = 2048
 }
 
 variable "desired_count" {
   description = "Number of tasks the service keeps running"
   type        = number
   default     = 1
+}
+
+variable "enable_adot_sidecar" {
+  description = "Enable AWS Distro for OpenTelemetry (ADOT) collector sidecar"
+  type        = bool
+  default     = true
+}
+
+variable "adot_ecr_repository_arn" {
+  description = "ARN of the ECR repository holding the mirrored ADOT image"
+  type        = string
+  default     = ""
+}
+
+variable "adot_ecr_repository_url" {
+  description = "URL of the ECR repository holding the mirrored ADOT image"
+  type        = string
+  default     = ""
+}
+
+variable "adot_image_digest" {
+  description = "Immutable sha256 digest of the reviewed ADOT collector image"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.adot_image_digest == "" || can(regex("^sha256:[0-9a-f]{64}$", var.adot_image_digest))
+    error_message = "adot_image_digest must be a full sha256 digest (sha256:<64 hex characters>), not a tag."
+  }
+}
+
+variable "metrics_log_group_arn" {
+  description = "ARN of the dedicated CloudWatch log group for EMF metrics"
+  type        = string
+  default     = ""
+}
+
+variable "adot_config_content" {
+  description = "Rendered ADOT collector configuration for in-memory injection via AOT_CONFIG_CONTENT"
+  type        = string
+  default     = ""
 }
 
 variable "log_retention_days" {

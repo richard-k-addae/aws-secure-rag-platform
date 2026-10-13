@@ -24,12 +24,12 @@ resource "aws_kms_key" "ecr" {
   })
 
   tags = {
-    Name = "rag-platform-${var.environment}-ecr-key"
+    Name = var.kms_alias_name != null ? "${replace(var.kms_alias_name, "alias/", "")}-key" : "rag-platform-${var.environment}-ecr-key"
   }
 }
 
 resource "aws_kms_alias" "ecr" {
-  name          = "alias/rag-platform-${var.environment}-ecr"
+  name          = var.kms_alias_name != null ? var.kms_alias_name : "alias/rag-platform-${var.environment}-ecr"
   target_key_id = aws_kms_key.ecr.key_id
 }
 

@@ -56,14 +56,14 @@ resource "aws_iam_role_policy" "execution" {
         Resource = "*"
       },
       {
-        Sid    = "PullApplicationImageOnly"
+        Sid    = "PullApprovedEcrImagesOnly"
         Effect = "Allow"
         Action = [
           "ecr:BatchCheckLayerAvailability",
           "ecr:BatchGetImage",
           "ecr:GetDownloadUrlForLayer",
         ]
-        Resource = var.ecr_repository_arn
+        Resource = compact([var.ecr_repository_arn, var.adot_ecr_repository_arn])
       },
       {
         # No logs:CreateLogGroup: the log group is created in logging.tf.
@@ -138,6 +138,31 @@ resource "aws_iam_role_policy" "task" {
         Effect   = "Allow"
         Action   = "bedrock:InvokeModel"
         Resource = "arn:aws:bedrock:${local.region}::foundation-model/${var.bedrock_embedding_model_id}"
+      },
+    ]
+  })
+}
+
+# The ADOT collector runs inside the task as a sidecar and needs IAM permissions
+# to emit Embedded Metric Format (EMF) logs to the dedicated metrics log group.
+# Scoped strictly to the metrics log group ARN.
+resource "aws_iam_role_policy" "task_metrics" {
+  count = var.enable_adot_sidecar ? 1 : 0
+
+  name = "${local.name}-ecs-task-metrics"
+  role = aws_iam_role.task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "PublishEmfMetricsToCloudWatchLogsOnly"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ]
+        Resource = "${var.metrics_log_group_arn}:*"
       },
     ]
   })

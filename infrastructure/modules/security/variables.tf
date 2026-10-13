@@ -23,6 +23,12 @@ variable "ecr_repository_arn" {
   type        = string
 }
 
+variable "adot_ecr_repository_arn" {
+  description = "ARN of the ECR repository for the mirrored ADOT collector image (optional)"
+  type        = string
+  default     = ""
+}
+
 variable "bedrock_inference_profile_id" {
   description = "ID of the Bedrock inference profile used for generation"
   type        = string

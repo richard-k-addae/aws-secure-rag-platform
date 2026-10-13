@@ -54,3 +54,18 @@ output "db_bootstrap_task_definition_arn" {
   description = "ARN of the one-shot database bootstrap task definition revision"
   value       = module.ecs.db_bootstrap_task_definition_arn
 }
+
+output "adot_ecr_repository_url" {
+  description = "ECR repository URL for the mirrored ADOT collector image"
+  value       = module.ecr_adot.repository_url
+}
+
+output "metrics_log_group_name" {
+  description = "Name of the CloudWatch log group receiving ADOT EMF metrics"
+  value       = module.observability.metrics_log_group_name
+}
+
+output "metrics_log_group_arn" {
+  description = "ARN of the CloudWatch log group receiving ADOT EMF metrics"
+  value       = module.observability.metrics_log_group_arn
+}

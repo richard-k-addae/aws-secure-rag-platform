@@ -6,3 +6,7 @@ app/certs/*.pem -text
 # Embedded verbatim as an ECS container command, so its bytes must not vary
 # by platform.
 infrastructure/modules/ecs/files/*.py text eol=lf
+
+# Patch files contain diffs with space-before-tab context lines and blank context;
+# preserve verbatim bytes and disable whitespace error checks.
+tools/adot/patches/*.patch -whitespace

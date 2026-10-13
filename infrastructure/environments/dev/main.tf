@@ -15,6 +15,18 @@ module "ecr" {
   environment     = var.environment
 }
 
+module "ecr_adot" {
+  source          = "../../modules/ecr"
+  repository_name = "rag-platform-adot"
+  environment     = var.environment
+  kms_alias_name  = "alias/rag-platform-${var.environment}-ecr-adot"
+}
+
+module "observability" {
+  source      = "../../modules/observability"
+  environment = var.environment
+}
+
 module "security" {
   source                 = "../../modules/security"
   environment            = var.environment
@@ -23,6 +35,7 @@ module "security" {
   private_route_table_id = module.networking.private_route_table_id
 
   ecr_repository_arn                = module.ecr.repository_arn
+  adot_ecr_repository_arn           = module.ecr_adot.repository_arn
   bedrock_inference_profile_id      = var.bedrock_inference_profile_id
   bedrock_generation_model_id       = var.bedrock_generation_model_id
   bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
@@ -39,6 +52,12 @@ module "ecs" {
   ecr_repository_arn = module.ecr.repository_arn
   ecr_repository_url = module.ecr.repository_url
   image_digest       = var.app_image_digest
+
+  adot_ecr_repository_arn = module.ecr_adot.repository_arn
+  adot_ecr_repository_url = module.ecr_adot.repository_url
+  adot_image_digest       = var.adot_image_digest
+  metrics_log_group_arn   = module.observability.metrics_log_group_arn
+  adot_config_content     = module.observability.adot_collector_config
 
   bedrock_inference_profile_id      = var.bedrock_inference_profile_id
   bedrock_generation_model_id       = var.bedrock_generation_model_id

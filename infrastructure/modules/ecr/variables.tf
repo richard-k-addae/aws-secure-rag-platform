@@ -7,3 +7,9 @@ variable "environment" {
   description = "Environment name"
   type        = string
 }
+
+variable "kms_alias_name" {
+  description = "Optional custom KMS alias name for the repository encryption key"
+  type        = string
+  default     = null
+}
