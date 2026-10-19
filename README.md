@@ -109,7 +109,7 @@ synthetic-data/ Synthetic document corpus (no real data)
 | 3 | Make AI behavior measurable: golden dataset, offline eval gates blocking CI, workflow scorecard | Done (offline); model-graded gates at M5 |
 | 4 | Make the release trustworthy: Checkov, TruffleHog, Gitleaks, pip-audit, Trivy container gate, Conftest Terraform policies, CycloneDX SBOMs, OCI provenance, evidence bundle | Done (see [Milestone 4 evidence](docs/security/MILESTONE_4_EVIDENCE.md)); Cosign signing at M5 |
 | 5 | Prove AWS delivery: Terraform foundation, ephemeral ECS deploy, smoke tests, teardown, cost report | Planned |
-| 6 | Operational depth: SQS ingestion with DLQ, OpenTelemetry, red-team findings, demo recording | Planned |
+| 6 | Operational depth: SQS ingestion with DLQ, OpenTelemetry, red-team findings, demo recording | Complete (observability scope — OpenTelemetry metrics, CloudWatch dashboard/alarms; see [Milestone 6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md)). Baseline collection continues operationally; current maturity and known limitations are documented there, not claimed as mature or as production SLOs. SQS/DLQ ingestion, red-team findings, and demo recording are tracked separately and not part of this closure. |
 
 Stretch goals: Bedrock Guardrails integration, Automated Reasoning policy validation.
 Out of scope by decision: Backstage, Kubernetes variant, multi-cloud, SaaS control plane, always-on infrastructure.
