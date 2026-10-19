@@ -13,6 +13,11 @@ output "metrics_kms_key_arn" {
   value       = aws_kms_key.metrics_logs.arn
 }
 
+output "namespace" {
+  description = "CloudWatch custom metrics namespace used by the ADOT collector"
+  value       = var.namespace
+}
+
 output "adot_collector_config" {
   description = "Rendered OpenTelemetry Collector configuration for ADOT in-memory injection via AOT_CONFIG_CONTENT"
   value = templatefile("${path.module}/templates/adot-collector-config.yaml.tpl", {

@@ -19,6 +19,10 @@ Metrics flow via OTLP/HTTP from the application container to the local ADOT side
 - **Network Isolation:** All OTLP communication occurs over task loopback (`localhost:4318`). Ports 4318 and 13133 have zero security group ingress rules and cannot be reached from outside the task ENI.
 - **Fail-Closed Privacy:** Prometheus and EMF pipelines drop all resource attributes (including `service.instance.id`). Prompts, answers, chunks, tenant IDs, document IDs, request IDs, database URLs, and exception messages are never included in metric dimensions or EMF logs.
 
+## Known Issue: `collector-undefined` Log Stream (M6.5B, not yet fixed)
+
+The `awsemf` exporter's `log_stream_name: "collector-{TaskId}"` currently resolves to the literal log stream name `collector-undefined` in `/aws/ecs/rag-platform-<env>/metrics`. collector-{TaskId} currently resolves to collector-undefined. Likely related to missing ECS resource metadata / placeholder resolution, but exact supported ADOT substitution behavior remains to be proven. This does not affect metric correctness — EMF dimension/value extraction into the `SecureRAGPlatform` namespace is independent of the log stream name, and live metric inventories confirm correct dimensions on every exported series. It is tracked as an operational risk only (shared log stream could face per-stream sequencing/throttling limits if the service is ever scaled beyond `desired_count = 1`) and is deliberately **not** fixed in M6.5B; no change to `adot-collector-config.yaml.tpl` was made for this issue.
+
 ## Metric Dimension & Cardinality Strategy
 
 - **Dimension Rollup Disabled:** Configured with `dimension_rollup_option: "NoDimensionRollup"` to eliminate automatic dimension permutations and cost explosion.
