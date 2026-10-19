@@ -55,7 +55,7 @@ exporters:
         metric_name_selectors:
           - "^rag\\.ingest\\.duration$"
           - "^rag\\.ingest\\.chunks$"
-      - dimensions: [[event, role]]
+      - dimensions: [[event], [event, role]]
         metric_name_selectors:
           - "^rag\\.security\\.events$"
 
