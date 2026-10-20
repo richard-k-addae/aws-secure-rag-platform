@@ -13,7 +13,7 @@ from app.core.telemetry import (
 )
 from app.models.responses import Citation, QueryResponse
 from app.rag.embeddings import EmbeddingService
-from app.rag.prompting import SYSTEM_PROMPT, build_user_prompt
+from app.rag.prompting import SYSTEM_PROMPT, QuestionTooLargeError, frame_user_prompt
 from app.rag.retrieval import VectorStore
 
 logger = get_logger(__name__)
@@ -46,13 +46,28 @@ class RagService:
         with TRACER.start_as_current_span("rag.query") as span:
             span.set_attribute("role", context.role.value)
             try:
+                # The caller's own input is the only size limit attributed to
+                # the caller; checked before any embedding or retrieval cost.
+                if len(question) > self._settings.max_question_chars:
+                    raise QuestionTooLargeError(
+                        f"Question of {len(question)} chars exceeds limit of "
+                        f"{self._settings.max_question_chars}"
+                    )
                 embedding = self._embeddings.embed(question)
                 chunks = self._store.search(embedding, context=context, top_k=top_k)
                 result_count = len(chunks)
                 span.set_attribute("result_count", result_count)
-                if not chunks:
-                    # Authorized-but-empty and unauthorized are indistinguishable.
-                    logger.info("query_no_context", retrieved=0)
+                framed = (
+                    frame_user_prompt(
+                        question, chunks, budget=self._settings.max_input_chars
+                    )
+                    if chunks
+                    else None
+                )
+                if framed is None or not framed.included:
+                    # Authorized-but-empty and unauthorized are indistinguishable;
+                    # context that cannot fit the budget is refused the same way.
+                    logger.info("query_no_context", retrieved=result_count)
                     outcome = "no_context"
                     span.set_attribute("outcome", outcome)
                     RAG_QUERY_RETRIEVED_CHUNKS.record(0, {**attributes, "outcome": "no_context"})
@@ -66,11 +81,11 @@ class RagService:
                         latency_ms=0,
                     )
 
-                prompt = build_user_prompt(question, chunks)
-                result = self._bedrock.invoke(prompt, system=SYSTEM_PROMPT)
+                result = self._bedrock.invoke(framed.text, system=SYSTEM_PROMPT)
+                # Cite only what the model was actually given.
                 citations = [
                     Citation(source=c.source, chunk_index=c.chunk_index, score=round(c.score, 4))
-                    for c in chunks
+                    for c in framed.included
                 ]
                 logger.info(
                     "query_answered",

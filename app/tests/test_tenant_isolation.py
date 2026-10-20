@@ -18,6 +18,7 @@ from app.auth.tenancy import TenantContext
 from app.main import app
 from app.rag.service import RagService
 from app.tests.conftest import ADMIN_A_HEADERS, TENANT_A_HEADERS, TENANT_B_HEADERS, make_bedrock
+from app.tests.prompt_frame import parse_framed_prompt
 
 client = TestClient(app)
 
@@ -315,4 +316,7 @@ def test_prompt_context_contains_only_authorized_chunks() -> None:
     mock_client = cast(MagicMock, bedrock._client)
     sent_prompt = mock_client.converse.call_args.kwargs["messages"][0]["content"][0]["text"]
     assert "TENANT-A-ONLY-MARKER" in sent_prompt
-    assert sent_prompt == build_user_prompt("what is the policy?", [authorized])
+    token = parse_framed_prompt(sent_prompt).token
+    assert sent_prompt == build_user_prompt(
+        "what is the policy?", [authorized], boundary_factory=lambda: token
+    )

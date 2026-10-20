@@ -22,12 +22,13 @@ from app.api.dependencies import get_rag_service
 from app.api.routes import documents, health, query
 from app.auth.permissions import Classification, Role
 from app.auth.tenancy import TenantContext
-from app.clients.bedrock import BedrockService, PromptTooLargeError
+from app.clients.bedrock import BedrockService
 from app.core import telemetry
 from app.core.security import sanitize_text
 from app.main import app as main_app
 from app.rag.embeddings import EmbeddingService
 from app.rag.ingestion import IngestionService
+from app.rag.prompting import QuestionTooLargeError
 from app.rag.retrieval import RetrievedChunk, VectorStore
 from app.rag.service import RagService
 from app.tests.conftest import ADMIN_A_HEADERS, TENANT_A_HEADERS
@@ -197,9 +198,9 @@ def test_security_events_emitted_for_all_rejection_paths(monkeypatch: MonkeyPatc
         assert resp.status_code == 400
         assert {"event": "path_rejected", "role": "admin"} in events
 
-        # 7. prompt_too_large
+        # 7. prompt_too_large: only the caller's own question is attributed (M7.2).
         fake_rag = MagicMock()
-        fake_rag.query.side_effect = PromptTooLargeError("too large")
+        fake_rag.query.side_effect = QuestionTooLargeError("too large")
         main_app.dependency_overrides[get_rag_service] = lambda: fake_rag
         try:
             resp = client.post(

@@ -17,6 +17,7 @@ from app.clients.bedrock import BedrockService
 from app.rag.prompting import SYSTEM_PROMPT, build_user_prompt
 from app.rag.retrieval import RetrievedChunk
 from app.rag.service import RagService
+from app.tests.prompt_frame import parse_framed_prompt
 
 CASES = json.loads(
     Path("evaluations/security/prompt_injection_cases.json").read_text(encoding="utf-8")
@@ -75,6 +76,10 @@ def test_injected_chunk_content_stays_in_user_role() -> None:
     assert request["system"] == [{"text": SYSTEM_PROMPT}]
     assert [m["role"] for m in request["messages"]] == ["user"]
     user_text = request["messages"][0]["content"][0]["text"]
-    assert user_text == build_user_prompt("What is the retention policy?", [malicious])
+    frame = parse_framed_prompt(user_text)
+    assert user_text == build_user_prompt(
+        "What is the retention policy?", [malicious], boundary_factory=lambda: frame.token
+    )
+    assert [p.content for p in frame.passages] == [malicious.content]
     assert "HACKED" in user_text
     assert "HACKED" not in request["system"][0]["text"]
