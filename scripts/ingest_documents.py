@@ -19,8 +19,13 @@ def main() -> None:
     service = IngestionService(embeddings=EmbeddingService(), store=VectorStore())
     total = 0
     for path in sorted(CORPUS.glob("*.md")):
+        # Trusted operator bootstrap: explicitly skips existing-document authorization.
         count = service.ingest_file(
-            path, tenant_id=tenant_id, classification=classification, source=path.name
+            path,
+            tenant_id=tenant_id,
+            classification=classification,
+            source=path.name,
+            authorize_as=None,
         )
         print(f"{path.name}: {count} chunks -> {tenant_id}/{classification.value}")
         total += count

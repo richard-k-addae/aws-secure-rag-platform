@@ -286,26 +286,12 @@
     "payload": "doc-restricted-m71",
     "payload_ref": null,
     "check": "document_id_overwrite",
-    "expected_behavior": "An ingestor (no RESTRICTED clearance) reusing an existing document_id must not be able to delete or replace chunks it cannot read: either the request is rejected or every DELETE is constrained to the caller's readable classifications.",
-    "control_status": "not_implemented",
+    "expected_behavior": "An ingestor (no RESTRICTED clearance) reusing the document_id of an existing restricted document is refused with a generic 403, no destructive write is committed, and exactly one bounded classification_denied event (role only) is emitted.",
+    "control_status": "enforced",
     "priority": "P0",
     "atlas": ["AML.T0070"],
     "owasp": ["LLM04:2025", "LLM08:2025"],
-    "notes": "Offline SQL-level check. Authoritative real-Postgres proof: app/tests/test_rls_integration.py::test_characterize_ingestor_document_id_reuse_destroys_restricted_document and ::test_ingestor_cannot_overwrite_restricted_document_by_id. A pre-check style fix must update this runner."
-  },
-  {
-    "id": "AUTHZ-01C",
-    "category": "authorization_integrity",
-    "source": "ingest_request",
-    "payload": "doc-restricted-m71",
-    "payload_ref": null,
-    "check": "document_id_overwrite_current",
-    "expected_behavior": "Characterizes current behavior: the ingest returns 200 and issues an unconditional DELETE scoped only by tenant_id and document_id.",
-    "control_status": "characterization",
-    "priority": "P0",
-    "atlas": ["AML.T0070"],
-    "owasp": ["LLM04:2025", "LLM08:2025"],
-    "notes": "Evidence. Fails once M7.4 fixes the ingest path."
+    "notes": "Fixed in M7.4a: the store authorizes the caller against the EXISTING document inside the write transaction. Offline runner uses a projection-aware fake database and checks the property, not the mechanism. Authoritative real-Postgres proof: app/tests/test_rls_integration.py (overwrite, atomicity, ACL, mixed-classification, concurrency and authorized-replacement tests). The vulnerable-behavior characterization AUTHZ-01C was retired with the fix."
   },
   {
     "id": "ID-01",

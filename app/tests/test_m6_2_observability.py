@@ -125,6 +125,7 @@ def test_structured_logs_remove_tenant_id_from_routine_events(
         source="doc.md",
         classification=Classification.PUBLIC,
         text="sample text",
+        authorize_as=None,
     )
     out = capsys.readouterr().out
     assert "document_ingested" in out
@@ -413,6 +414,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
             Classification.PUBLIC,
             [(0, f"content {RETRIEVED_CONTENT_MARKER}", [0.1, 0.2])],
             document_id=DOCUMENT_ID_MARKER,
+            authorize_as=None,
         )
 
         # 6. Ingestion
@@ -423,6 +425,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
             classification=Classification.PUBLIC,
             text=f"secret content {RETRIEVED_CONTENT_MARKER}",
             document_id=DOCUMENT_ID_MARKER,
+            authorize_as=None,
         )
 
         # 7. Security rejection

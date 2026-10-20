@@ -174,6 +174,7 @@ def main() -> None:
         classification=Classification.INTERNAL,
         chunks=[(0, "All systems must maintain strict telemetry scrubbing.", vector)],
         document_id="doc-synth-001",
+        authorize_as=None,  # trusted local operator tooling
     )
 
     ctx_reader = TenantContext("tenant-a", Role.READER, frozenset({Classification.INTERNAL}))
@@ -192,6 +193,7 @@ def main() -> None:
         classification=Classification.PUBLIC,
         text="Telemetry must never log sensitive customer content or prompts.",
         document_id="doc-synth-002",
+        authorize_as=None,  # trusted local operator tooling
     )
     print(f"Ingested {ingested_chunks} chunks.")
 

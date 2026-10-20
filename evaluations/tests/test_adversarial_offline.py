@@ -33,7 +33,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -42,6 +42,7 @@ from httpx import Response
 
 from app.api.dependencies import get_bedrock_service, get_ingestion_service, get_rag_service
 from app.clients.bedrock import BedrockService
+from app.core import telemetry
 from app.core.config import get_settings
 from app.core.security import sanitize_text
 from app.core.sensitive_data import SensitiveKind, scan
@@ -247,25 +248,98 @@ def run_answered_query(
     return capture
 
 
+WRITE_VERBS = ("DELETE", "INSERT", "UPDATE", "TRUNCATE", "MERGE")
+SELECT_LIST = re.compile(r"^\s*SELECT\s+(?P<cols>.+?)\s+FROM\s+document_chunks\b", re.I | re.S)
+
+
+class _FakeCursor:
+    """Answers reads of document_chunks from in-memory rows; records, never applies, writes.
+
+    SELECT results are projected by the column names the caller asks for, so
+    the fake does not depend on how the store queries existing rows. An
+    unknown column raises KeyError: a harness error, never an expected failure.
+    """
+
+    def __init__(self, conn: "_FakeConnection") -> None:
+        self._conn = conn
+        self._rows: list[tuple[Any, ...]] = []
+        self.rowcount = 0
+
+    def __enter__(self) -> "_FakeCursor":
+        return self
+
+    def __exit__(self, *exc: object) -> Literal[False]:
+        return False
+
+    def execute(self, sql: str, params: Any = None) -> None:
+        self._conn.statements.append(sql)
+        self._rows = []
+        self.rowcount = 0
+        match = SELECT_LIST.match(sql)
+        if match:
+            columns = [c.strip() for c in match.group("cols").split(",")]
+            self._rows = [tuple(row[c] for c in columns) for row in self._conn.existing]
+            self.rowcount = len(self._rows)
+
+    def fetchall(self) -> list[tuple[Any, ...]]:
+        return list(self._rows)
+
+    def fetchone(self) -> tuple[Any, ...] | None:
+        return self._rows[0] if self._rows else None
+
+
+class _FakeConnection:
+    """psycopg semantics that matter here: commit on clean exit, rollback on exception."""
+
+    def __init__(self, existing: list[dict[str, Any]]) -> None:
+        self.existing = existing
+        self.statements: list[str] = []
+        self.committed: bool | None = None
+
+    def cursor(self) -> _FakeCursor:
+        return _FakeCursor(self)
+
+    def __enter__(self) -> "_FakeConnection":
+        return self
+
+    def __exit__(self, exc_type: object, *rest: object) -> Literal[False]:
+        self.committed = exc_type is None
+        return False
+
+    @property
+    def wrote(self) -> bool:
+        return any(s.lstrip().upper().startswith(WRITE_VERBS) for s in self.statements)
+
+
 @dataclass
 class IngestCapture:
     response: Response
-    statements: list[tuple[str, tuple[Any, ...] | None]]
+    connections: list[_FakeConnection]
+    events: list[dict[str, str]]
+
+    @property
+    def committed_writes(self) -> bool:
+        return any(c.wrote and c.committed for c in self.connections)
 
 
-def run_recorded_ingest(document_id: str) -> IngestCapture:
-    """Drive /v1/documents/ingest as an ingestor through the real store code.
+def run_fake_db_ingest(document_id: str, existing: list[dict[str, Any]]) -> IngestCapture:
+    """Drive /v1/documents/ingest as an ingestor through the real service and store code."""
+    connections: list[_FakeConnection] = []
+    events: list[dict[str, str]] = []
 
-    psycopg.connect is replaced by a recording connection, so the exact SQL
-    the real VectorStore would send is captured and nothing is executed.
-    """
-    cursor = MagicMock()
-    conn = MagicMock()
-    conn.cursor.return_value.__enter__.return_value = cursor
-    conn.__enter__.return_value = conn
+    def connect(*args: Any, **kwargs: Any) -> _FakeConnection:
+        conn = _FakeConnection(existing)
+        connections.append(conn)
+        return conn
+
     embeddings = MagicMock()
     embeddings.embed.return_value = [0.1, 0.2, 0.3, 0.4]
-    with patch("app.rag.retrieval.psycopg.connect", return_value=conn):
+    with (
+        patch("app.rag.retrieval.psycopg.connect", side_effect=connect),
+        patch.object(
+            telemetry.SECURITY_EVENTS, "add", lambda value, attrs: events.append(dict(attrs))
+        ),
+    ):
         store = VectorStore(conninfo="postgresql://offline-harness/never-connected")
         service = IngestionService(embeddings=embeddings, store=store)
         app.dependency_overrides[get_ingestion_service] = lambda: service
@@ -281,11 +355,7 @@ def run_recorded_ingest(document_id: str) -> IngestCapture:
             )
         finally:
             app.dependency_overrides.pop(get_ingestion_service)
-    statements = [
-        (str(call.args[0]), tuple(call.args[1]) if len(call.args) > 1 else None)
-        for call in cursor.execute.call_args_list
-    ]
-    return IngestCapture(response=response, statements=statements)
+    return IngestCapture(response=response, connections=connections, events=events)
 
 
 def run_generate(headers: dict[str, str]) -> tuple[Response, MagicMock]:
@@ -488,35 +558,38 @@ def run_no_tools(case: dict[str, Any]) -> None:
     assert_no_tools(dict(fake.converse.call_args.kwargs))
 
 
-def _deletes(capture: IngestCapture) -> list[tuple[str, tuple[Any, ...] | None]]:
-    return [
-        (sql, params)
-        for sql, params in capture.statements
-        if sql.lstrip().upper().startswith("DELETE")
-    ]
-
-
 def run_document_id_overwrite(case: dict[str, Any]) -> None:
-    capture = run_recorded_ingest(payload_of(case))
-    if capture.response.status_code == 403:
-        return
-    require(capture.response.status_code == 200, f"ingest returned {capture.response.status_code}")
-    deletes = _deletes(capture)
-    require(bool(deletes), "ingest issued no DELETE; runner needs updating")
-    for sql, _ in deletes:
-        assert "classification" in sql, sql
+    """Unauthorized replacement of an existing document cannot be committed.
 
-
-def run_document_id_overwrite_current(case: dict[str, Any]) -> None:
+    Mechanism-agnostic: it does not matter whether the control is a pre-check,
+    a constrained DELETE or a lock, only that no destructive write commits,
+    the caller is refused without detail, and one bounded event is emitted.
+    """
     document_id = payload_of(case)
-    capture = run_recorded_ingest(document_id)
-    assert capture.response.status_code == 200
-    assert _deletes(capture) == [
-        (
-            "DELETE FROM document_chunks WHERE tenant_id = %s AND document_id = %s",
-            ("tenant-a", document_id),
-        )
+    # Control: with no existing document the same request is a normal ingest,
+    # so a refusal below is caused by the existing document, not the harness.
+    control = run_fake_db_ingest(document_id, existing=[])
+    require(control.response.status_code == 200, "control ingest did not succeed")
+    require(control.committed_writes, "control ingest committed no writes")
+
+    existing = [
+        {
+            "tenant_id": "tenant-a",
+            "document_id": document_id,
+            "source": "restricted-incident.md",
+            "chunk_index": 0,
+            "content": "SYNTHETIC RESTRICTED MARKER",
+            "classification": "restricted",
+            "allowed_roles": ["admin"],
+        }
     ]
+    capture = run_fake_db_ingest(document_id, existing=existing)
+    assert capture.response.status_code == 403
+    assert not capture.committed_writes
+    body = capture.response.text.lower()
+    for leaked in ("restricted", "incident", "marker", "admin", document_id):
+        assert leaked not in body, leaked
+    assert capture.events == [{"event": "classification_denied", "role": "ingestor"}]
 
 
 def run_header_role_assertion(case: dict[str, Any]) -> None:
@@ -547,7 +620,6 @@ RUNNERS: dict[str, Callable[[dict[str, Any]], None]] = {
     "output_secret_leak": run_output_secret_leak,
     "no_tools": run_no_tools,
     "document_id_overwrite": run_document_id_overwrite,
-    "document_id_overwrite_current": run_document_id_overwrite_current,
     "header_role_assertion": run_header_role_assertion,
     "header_role_assertion_current": run_header_role_assertion_current,
 }

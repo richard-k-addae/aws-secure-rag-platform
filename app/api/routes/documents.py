@@ -18,6 +18,7 @@ from app.core.telemetry import record_security_event
 from app.models.requests import IngestRequest
 from app.models.responses import IngestResponse
 from app.rag.ingestion import IngestionService
+from app.rag.retrieval import DocumentReplacementDeniedError
 
 router = APIRouter(tags=["documents"])
 
@@ -49,12 +50,22 @@ def ingest(
         raise HTTPException(status_code=400, detail="Invalid source path")
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Unknown document")
-    count = service.ingest_file(
-        path,
-        tenant_id=context.tenant_id,
-        classification=body.classification,
-        source=body.source,
-        document_id=body.document_id,
-        allowed_roles=[r.value for r in body.allowed_roles],
-    )
+    try:
+        count = service.ingest_file(
+            path,
+            tenant_id=context.tenant_id,
+            classification=body.classification,
+            source=body.source,
+            document_id=body.document_id,
+            allowed_roles=[r.value for r in body.allowed_roles],
+            authorize_as=context,
+        )
+    except DocumentReplacementDeniedError as exc:
+        # Replacing a document requires access to the EXISTING document. The
+        # event carries only the role and the detail is generic, so neither
+        # reveals the existing document's classification, source or ACL.
+        record_security_event("classification_denied", role=context.role.value)
+        raise HTTPException(
+            status_code=403, detail="Not authorized to replace this document"
+        ) from exc
     return IngestResponse(source=body.source, chunks_ingested=count)
