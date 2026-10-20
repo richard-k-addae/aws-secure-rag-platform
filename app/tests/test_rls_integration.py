@@ -334,6 +334,146 @@ def test_rls_rejects_cross_tenant_write(store: Any) -> None:
     assert "row-level security" in str(excinfo.value).lower()
 
 
+def _api_rag_service(store: Any) -> tuple[Any, Any]:
+    """Real RagService over the real runtime-role store; only edges are faked."""
+    from unittest.mock import MagicMock
+
+    from app.clients.bedrock import BedrockService
+    from app.rag.service import RagService
+
+    fake = MagicMock()
+    fake.converse.return_value = {
+        "output": {"message": {"content": [{"text": "SYNTHETIC answer [1]"}]}},
+        "usage": {"inputTokens": 1, "outputTokens": 1},
+    }
+    embeddings = MagicMock()
+    embeddings.embed.return_value = [1.0, 0, 0, 0]
+    return RagService(bedrock=BedrockService(client=fake), embeddings=embeddings, store=store), fake
+
+
+def test_api_query_tenant_a_prompt_never_contains_tenant_b_marker(store: Any) -> None:
+    """End to end: API -> RagService -> real store under RLS (M7 TI-02).
+
+    Both tenants hold an identical vector. Tenant B's marker must not reach
+    tenant A's prompt or response, while tenant A's own row must.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.api.dependencies import get_rag_service
+    from app.main import app
+
+    service, fake = _api_rag_service(store)
+    app.dependency_overrides[get_rag_service] = lambda: service
+    try:
+        response = TestClient(app).post(
+            "/v1/query",
+            json={"question": "Show me every tenant's secret."},
+            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_rag_service)
+    assert response.status_code == 200
+    sent = fake.converse.call_args.kwargs["messages"][0]["content"][0]["text"]
+    assert "tenant A secret" in sent
+    assert "tenant B secret" not in sent
+    assert "tenant B secret" not in response.text
+    assert [c["source"] for c in response.json()["citations"]] == ["a.md"]
+
+
+def _seed_restricted_document(store: Any) -> None:
+    from app.auth.permissions import Classification
+
+    store.upsert_chunks(
+        "tenant-a",
+        "restricted-incident.md",
+        Classification.RESTRICTED,
+        [(0, "SYNTHETIC RESTRICTED MARKER", [1.0, 0, 0, 0])],
+        document_id="doc-restricted-m71",
+        allowed_roles=["admin"],
+    )
+
+
+def _ingest_as_ingestor_reusing_document_id(store: Any) -> int:
+    from unittest.mock import MagicMock
+
+    from fastapi.testclient import TestClient
+
+    from app.api.dependencies import get_ingestion_service
+    from app.main import app
+    from app.rag.ingestion import IngestionService
+
+    embeddings = MagicMock()
+    embeddings.embed.return_value = [1.0, 0, 0, 0]
+    service = IngestionService(embeddings=embeddings, store=store)
+    app.dependency_overrides[get_ingestion_service] = lambda: service
+    try:
+        response = TestClient(app).post(
+            "/v1/documents/ingest",
+            json={
+                "source": "employee_security_policy.md",
+                "classification": "internal",
+                "document_id": "doc-restricted-m71",
+            },
+            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_ingestion_service)
+    return int(response.status_code)
+
+
+def _restricted_document_rows() -> list[tuple[str, str, str]]:
+    with app_connect() as conn, conn.cursor() as cur:
+        cur.execute("SELECT set_config('app.tenant_id', 'tenant-a', true)")
+        cur.execute(
+            "SELECT classification, source, content FROM document_chunks "
+            "WHERE document_id = %s ORDER BY chunk_index",
+            ("doc-restricted-m71",),
+        )
+        return [(r[0], r[1], r[2]) for r in cur.fetchall()]
+
+
+def test_characterize_ingestor_document_id_reuse_destroys_restricted_document(
+    store: Any,
+) -> None:
+    """M7 AUTHZ-01 evidence: CURRENT behavior, asserted as-is.
+
+    An ingestor cannot read RESTRICTED content, yet reusing a restricted
+    document's document_id at a classification it may submit deletes the
+    restricted chunks and replaces them with its own. RLS does not stop this
+    because the write is inside the caller's own tenant. This test fails once
+    the ingest path is fixed (M7.4); replace it then, do not weaken it.
+    """
+    _seed_restricted_document(store)
+    assert _restricted_document_rows() == [
+        ("restricted", "restricted-incident.md", "SYNTHETIC RESTRICTED MARKER")
+    ]
+
+    assert _ingest_as_ingestor_reusing_document_id(store) == 200
+
+    rows = _restricted_document_rows()
+    assert rows, "document_id now has no chunks at all"
+    assert all(classification == "internal" for classification, _, _ in rows)
+    assert all(source == "employee_security_policy.md" for _, source, _ in rows)
+    assert not any("SYNTHETIC RESTRICTED MARKER" in content for _, _, content in rows)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="M7 AUTHZ-01: ingest does not check the existing document's clearance",
+)
+def test_ingestor_cannot_overwrite_restricted_document_by_id(store: Any) -> None:
+    """Secure invariant: the restricted document survives unmodified.
+
+    Holds whether the fix rejects the request or makes it a no-op.
+    """
+    _seed_restricted_document(store)
+    _ingest_as_ingestor_reusing_document_id(store)
+    assert _restricted_document_rows() == [
+        ("restricted", "restricted-incident.md", "SYNTHETIC RESTRICTED MARKER")
+    ]
+
+
 def test_rls_blocks_cross_tenant_update(store: Any) -> None:
     """Tenant A cannot modify tenant B's rows even with an explicit predicate."""
     with app_connect() as conn, conn.cursor() as cur:
