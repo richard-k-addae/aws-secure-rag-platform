@@ -39,14 +39,14 @@ ADVERSARIAL_CATEGORY_LABELS: dict[str, str] = {
 # matched against the junit "classname" attribute, which pytest renders as the
 # dotted module path (e.g. evaluations.tests.test_groundedness).
 #
-# The sensitive-data row is labelled "detection" deliberately: that suite
-# exercises app.core.sensitive_data as a library. Request/response blocking
-# and masking are not implemented, so no enforcement claim is made here.
+# The sensitive-data row is labelled "library" deliberately: that suite
+# exercises app.core.sensitive_data in isolation against request-side cases.
+# Output enforcement (M7.3) is scored by the adversarial OUT-02 case instead.
 CATEGORY_BY_MODULE: dict[str, str] = {
     "test_groundedness": "Refusal / groundedness",
     "test_prompt_injection": "Prompt injection",
     "test_response_quality": "Citation integrity",
-    "test_sensitive_data": "Sensitive-data detection (not enforced)",
+    "test_sensitive_data": "Sensitive-data detection (library)",
     ADVERSARIAL_MODULE: "Adversarial (offline)",
 }
 
@@ -288,10 +288,10 @@ def build_scorecard(junit: Path) -> tuple[str, bool]:
         "the model and returns to the caller. They do not show that a model",
         "resists jailbreaks or ignores injected text; that is the live evaluation.",
         "",
-        "Sensitive-data results cover DETECTION ONLY. app.core.sensitive_data is",
-        "a library exercised in isolation; it is not called from RagService or",
-        "the API routes. Request blocking and response masking are NOT",
-        "implemented, and nothing here demonstrates them.",
+        "Sensitive-data library results cover DETECTION of request-side cases.",
+        "Model-output enforcement (withhold credentials/identifiers, mask",
+        "emails) exists for /v1/query answers and is scored by adversarial",
+        "case OUT-02. Request input is NOT checked at runtime.",
         "",
         "Latency, live Bedrock behavior and model-graded metrics are not verified",
         "by this run and remain informational until Milestone 5.",

@@ -26,22 +26,29 @@ They do not assert that the control is implemented. Each case carries a
 correct pattern fires for each case, `redact()` removes the matched value,
 and ordinary questions are not flagged.
 
-Request/response enforcement is **not implemented**. The detector is not
-called from `RagService`, the API routes, or any other runtime path, so:
+Enforcement status since M7.3:
 
-- no request containing an SSN or credential is blocked at runtime
-- no answer containing PII is masked at runtime
-- the offline gate makes no claim about live RAG behavior
+- **Model output is enforced** for `/v1/query`: `app/rag/output_integrity.py`
+  runs the detector on every answer, withholding it on a credential or
+  national-identifier finding and masking emails with `redact()`. This is
+  verified by `app/tests/test_output_integrity.py` and adversarial case
+  OUT-02, not by this case file.
+- **Request input is not enforced**: no question or ingested document
+  containing an SSN or credential is blocked at runtime. These cases are
+  request-side, so they stay `detection_only`.
+- `/v1/generate` output is not checked, and Bedrock Guardrails are not
+  enabled.
 
 The scorecard in `scripts/run_evaluations.py` labels this row
-"Sensitive-data detection (not enforced)" for that reason. A tripwire test
-fails if a case is promoted beyond `detection_only` without enforcement
-gates being added, so the suite cannot silently vouch for a control it does
-not exercise.
+"Sensitive-data detection (library)". A tripwire test fails if a case is
+promoted beyond `detection_only` without request-side enforcement gates
+being added, so the suite cannot silently vouch for a control it does not
+exercise. The tripwire is a documentation check, not a code check: whoever
+adds request-side enforcement must update `control_status` by hand.
 
-Note that the tripwire is a documentation check, not a code check: nothing
-automatically detects enforcement being wired into `RagService`. Whoever
-implements Phase 5 enforcement must update `control_status` and the
-scorecard label by hand.
+### `adversarial_cases.json`
 
-Runtime enforcement, layered with Bedrock Guardrails, is Phase 5 work.
+Executed by `evaluations/tests/test_adversarial_offline.py`, with
+`control_status` in `enforced`, `not_implemented` (strict expected failure)
+or `characterization`. These are structural, deterministic checks; they make
+no claim about live model behavior.

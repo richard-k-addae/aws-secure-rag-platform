@@ -8,15 +8,15 @@ Scope, stated plainly:
 * What these tests verify: detection behavior of app.core.sensitive_data.
   Given the case input, the correct pattern fires and the detector's
   recommended disposition is correct.
-* What these tests do NOT verify: request/response enforcement. The
-  detector is not called from RagService, the API routes, or any other
-  runtime path, so nothing here shows the platform blocking a request or
-  masking an answer.
-* No claim is made about blocking or masking in the live RAG path. The
-  ``expected`` values describe the intended control; ``control_status``
-  records that only detection exists today.
+* What these tests do NOT verify: runtime enforcement. Since M7.3 the
+  detector IS applied to /v1/query model output (withhold or mask); that is
+  verified separately by app/tests/test_output_integrity.py and adversarial
+  case OUT-02, not here. Request input (questions, ingested documents) is
+  still not checked at runtime.
+* These cases describe request-side inputs, so ``control_status`` stays
+  ``detection_only``: nothing here shows a request being blocked.
 
-Runtime enforcement and live Bedrock Guardrails behavior are Phase 5.
+Live Bedrock Guardrails behavior is not covered (Guardrails are not enabled).
 """
 import json
 from pathlib import Path

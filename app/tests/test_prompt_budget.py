@@ -127,9 +127,9 @@ def test_full_retrieval_is_fitted_not_blamed_on_the_user(
     # Highest-ranked passages first, in order, whole.
     assert [p.source for p in frame.passages] == [c.source for c in chunks[:included]]
     assert [p.content for p in frame.passages] == [c.content for c in chunks[:included]]
-    # Citations describe exactly what the model was given.
-    assert [c["source"] for c in response.json()["citations"]] == [
-        c.source for c in chunks[:included]
+    # Citations are what the answer validly cites ("[1]"), never just "given".
+    assert [(c["index"], c["source"]) for c in response.json()["citations"]] == [
+        (1, chunks[0].source)
     ]
 
 

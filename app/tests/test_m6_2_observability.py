@@ -82,7 +82,9 @@ def test_structured_logs_remove_tenant_id_from_routine_events(
 
     bedrock_mock = MagicMock()
     bedrock_mock.converse.return_value = {
-        "output": {"message": {"content": [{"text": "safe answer"}]}},
+        # Cites [1]: an uncited answer is withheld since M7.3 (logged as
+        # query_answer_withheld), and this test is about the answered event.
+        "output": {"message": {"content": [{"text": "safe answer [1]"}]}},
         "usage": {"inputTokens": 5, "outputTokens": 5},
     }
     bedrock = BedrockService(client=bedrock_mock)

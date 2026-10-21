@@ -69,7 +69,7 @@ class FakeRag:
         return QueryResponse(
             request_id="req-1",
             answer=f"The answer is {ANSWER_MARK} [1]",
-            citations=[Citation(source="policy.md", chunk_index=0, score=0.9)],
+            citations=[Citation(index=1, source="policy.md", chunk_index=0, score=0.9)],
             model_id="test-model",
             input_tokens=8,
             output_tokens=4,

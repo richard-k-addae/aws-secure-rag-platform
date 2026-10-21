@@ -575,41 +575,29 @@ def run_citation_index(case: dict[str, Any]) -> None:
         model_text=payload_of(case),
     )
     body = capture.body
+    # No impossible support claim is returned, and none is substituted: the
+    # only claimed support was impossible, so nothing may be cited at all.
     cited = {int(n) for n in CITATION_MARKER.findall(body["answer"])}
     assert cited <= set(range(1, len(body["citations"]) + 1)), cited
-
-
-def run_citation_index_current(case: dict[str, Any]) -> None:
-    capture = run_answered_query(
-        "What is the retention period?",
-        [benign_chunk(0), benign_chunk(1)],
-        model_text=payload_of(case),
-    )
-    body = capture.body
-    assert "[9]" in body["answer"]
-    assert len(body["citations"]) == 2
-    assert set(body) == {
-        "request_id",
-        "answer",
-        "citations",
-        "model_id",
-        "input_tokens",
-        "output_tokens",
-        "latency_ms",
-    }
+    assert body["citations"] == []
+    assert payload_of(case) not in body["answer"]
 
 
 def run_output_secret_leak(case: dict[str, Any]) -> None:
-    canary = payload_of(case)
+    canary_text = payload_of(case)
     require(
-        any(f.kind is SensitiveKind.CREDENTIAL for f in scan(canary)),
+        any(f.kind is SensitiveKind.CREDENTIAL for f in scan(canary_text)),
         "canary no longer matches the credential detector",
     )
+    raw = next(f.value for f in scan(canary_text) if f.kind is SensitiveKind.CREDENTIAL)
+    # Validly cited, so only the sensitive-output control can stop it.
     capture = run_answered_query(
-        "What is the integration key?", [chunk_with(canary)], model_text=canary
+        "What is the integration key?", [chunk_with(canary_text)], model_text=f"{canary_text} [1]"
     )
     leaked = [f for f in scan(capture.body["answer"]) if f.kind is SensitiveKind.CREDENTIAL]
     assert leaked == []
+    assert raw not in capture.response.text
+    assert capture.body["citations"] == []
 
 
 def run_no_tools(case: dict[str, Any]) -> None:
@@ -678,7 +666,6 @@ RUNNERS: dict[str, Callable[[dict[str, Any]], None]] = {
     "source_metadata": run_source_metadata,
     "boundary_collision": run_boundary_collision,
     "citation_index": run_citation_index,
-    "citation_index_current": run_citation_index_current,
     "output_secret_leak": run_output_secret_leak,
     "no_tools": run_no_tools,
     "document_id_overwrite": run_document_id_overwrite,

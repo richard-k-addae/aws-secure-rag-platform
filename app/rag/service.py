@@ -13,6 +13,7 @@ from app.core.telemetry import (
 )
 from app.models.responses import Citation, QueryResponse
 from app.rag.embeddings import EmbeddingService
+from app.rag.output_integrity import review_answer
 from app.rag.prompting import SYSTEM_PROMPT, QuestionTooLargeError, frame_user_prompt
 from app.rag.retrieval import VectorStore
 
@@ -82,17 +83,33 @@ class RagService:
                     )
 
                 result = self._bedrock.invoke(framed.text, system=SYSTEM_PROMPT)
-                # Cite only what the model was actually given.
+                # Output checks run before anything from the answer is used.
+                reviewed = review_answer(result.text, len(framed.included))
+                # Cite only passages the answer validly cites; never substitute.
                 citations = [
-                    Citation(source=c.source, chunk_index=c.chunk_index, score=round(c.score, 4))
-                    for c in framed.included
+                    Citation(
+                        index=i,
+                        source=framed.included[i - 1].source,
+                        chunk_index=framed.included[i - 1].chunk_index,
+                        score=round(framed.included[i - 1].score, 4),
+                    )
+                    for i in reviewed.cited
                 ]
-                logger.info(
-                    "query_answered",
-                    role=context.role.value,
-                    retrieved=result_count,
-                    request_id=result.request_id,
-                )
+                if reviewed.withheld is not None:
+                    # Bounded reason only; the model text is never logged here.
+                    logger.info(
+                        "query_answer_withheld",
+                        role=context.role.value,
+                        reason=reviewed.withheld.value,
+                        request_id=result.request_id,
+                    )
+                else:
+                    logger.info(
+                        "query_answered",
+                        role=context.role.value,
+                        retrieved=result_count,
+                        request_id=result.request_id,
+                    )
                 outcome = "answered"
                 span.set_attribute("outcome", outcome)
                 RAG_QUERY_RETRIEVED_CHUNKS.record(
@@ -100,7 +117,7 @@ class RagService:
                 )
                 return QueryResponse(
                     request_id=result.request_id,
-                    answer=result.text,
+                    answer=reviewed.answer,
                     citations=citations,
                     model_id=result.model_id,
                     input_tokens=result.input_tokens,

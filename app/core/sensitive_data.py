@@ -4,11 +4,11 @@ Pattern-based detection of national identifiers, credential-like strings and
 email addresses. Detection here is a behavioral property of the patterns
 below, not a measured accuracy score.
 
-Enforcement status: this module is a detection library only. It is NOT
-called from RagService, the API routes, or any other request/response path,
-so the platform does not currently block or mask sensitive data at runtime.
-Nothing here changes Milestone 1 or Milestone 2 behavior. Runtime
-enforcement, layered with Bedrock Guardrails, is Phase 5 work.
+Enforcement status (M7.3): applied to MODEL OUTPUT only, by
+app/rag/output_integrity.py on every /v1/query answer - BLOCK findings
+withhold the answer, MASK findings are redacted with redact(). It is still
+NOT applied to request input (questions or ingested documents), and
+/v1/generate output is not checked. Bedrock Guardrails are not enabled.
 """
 import re
 from collections.abc import Sequence
@@ -25,10 +25,10 @@ class SensitiveKind(StrEnum):
 
 
 class Disposition(StrEnum):
-    """Control decision that *would* apply if enforcement were wired in.
+    """Control decision for scanned text.
 
-    This is the detector's recommendation, not an action taken by the
-    platform. No caller acts on it today.
+    app/rag/output_integrity.py acts on it for /v1/query answers. For any
+    other text it remains a recommendation only.
     """
 
     BLOCK = "block"
