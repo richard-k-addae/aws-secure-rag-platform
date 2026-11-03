@@ -48,6 +48,8 @@ CATEGORY_BY_MODULE: dict[str, str] = {
     "test_response_quality": "Citation integrity",
     "test_sensitive_data": "Sensitive-data detection (library)",
     ADVERSARIAL_MODULE: "Adversarial (offline)",
+    # Rules/harness of the M7.5 live baseline, tested offline; no model is run.
+    "test_live_baseline_rules": "Live-baseline rules (offline)",
 }
 
 UNCATEGORIZED = "Uncategorized"
