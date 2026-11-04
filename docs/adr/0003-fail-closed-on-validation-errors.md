@@ -1,6 +1,6 @@
 # ADR 0003: Fail closed on retrieval and validation errors
 
-Status: Accepted (implemented for store outage, throttling, no-context; guardrail layer pending)
+Status: Accepted (implemented for store outage, throttling, no-context, and invalid/uncited answers since M7.3; no guardrail layer - Guardrails not adopted, see ADR 0005)
 
 ## Context
 When a safety-relevant dependency fails, the service must not silently fall

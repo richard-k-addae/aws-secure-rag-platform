@@ -4,6 +4,11 @@ Defects found in this platform's own controls, with the fix and the
 regression test that keeps them fixed. Recorded because a control that was
 never adversarially tested is a claim, not a control.
 
+M7 AI-security findings (AUTHZ-01, IPI structural findings, citation
+integrity, the S2 sensitive-output detector gap, ID-01 and the Guardrail
+evaluations) are tracked in the
+[M7 finding register](M7_AI_SECURITY_EVIDENCE_INDEX.md#m7-finding-register).
+
 ---
 
 ## F-001 — Row-level security was silently inert; a false-passing test hid it

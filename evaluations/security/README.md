@@ -1,6 +1,7 @@
 # AI security test suite (Phase 5)
 
-Independent tests beyond Bedrock Guardrails:
+Independent AI-security tests (Bedrock Guardrails are not adopted; see
+ADR 0005). Intended scope:
 
 - Indirect prompt injection embedded in uploaded synthetic documents
 - System-prompt disclosure attempts
@@ -9,6 +10,9 @@ Independent tests beyond Bedrock Guardrails:
 - Encoded/obfuscated attacks (base64, homoglyphs, split payloads)
 - Token-exhaustion and cost-abuse patterns
 
+Not every item has a dedicated case yet; what is actually verified is
+recorded per case in `control_status` below and in the
+[M7 evidence index](../../docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md).
 Each test asserts an expected control response (block, refusal, masking,
 authorization denial) and runs as a CI gate: the pipeline fails when a
 control regresses.

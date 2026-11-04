@@ -21,4 +21,4 @@ rows marked Planned land with the milestone shown and must arrive with tests.
 | Ingestion above the caller's classification | 403 | Implemented | `app/tests/test_tenant_isolation.py` |
 | Unknown classification value | 422 from schema validation | Implemented | request model enum |
 | Duplicate ingestion event | Idempotent processing | Planned (M6) | with SQS pipeline |
-| Guardrail layer error | **Profile-dependent**: `prod` fails closed; `dev`/`test` degrade with an explicit warning and structured log event | Planned (stretch, Guardrails integration) | with Guardrails integration |
+| Guardrail layer error | **Profile-dependent**: `prod` fails closed; `dev`/`test` degrade with an explicit warning and structured log event | Not applicable - Guardrails evaluated in M7.6 and not adopted ([ADR 0005](../adr/0005-do-not-adopt-bedrock-guardrails.md)); this contract applies if a Guardrail layer is adopted later | - |

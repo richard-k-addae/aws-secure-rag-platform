@@ -2,7 +2,7 @@
 
 > Production-style, security-first Retrieval-Augmented Generation platform on AWS Bedrock — built with Terraform, ECS Fargate, FastAPI, and a DevSecOps pipeline with AI evaluation gates.
 
-**Status: Phase 1 complete; local RAG core (retrieval, citations, ingestion) implemented.** See [Roadmap](#roadmap).
+**Status: M7 AI-security evaluation and hardening scope complete; not production-ready** - ID-01 (caller-controlled identity) is an open deployment prerequisite. The dev AWS runtime is intentionally costed down. See [Roadmap](#roadmap) and the [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md).
 
 ## Overview
 
@@ -42,7 +42,7 @@ Amazon Cognito  (OAuth 2.0 / JWT, RBAC)
   |
 FastAPI RAG Service on ECS Fargate  (private subnets, no public IPs)
   |
-  +-- Amazon Bedrock (configurable model ID) + Bedrock Guardrails
+  +-- Amazon Bedrock (configurable model ID)  (Guardrails evaluated in M7.6, not adopted)
   +-- PostgreSQL + pgvector  (vector store, encrypted, private)
   +-- Amazon S3  (synthetic document store)
   +-- DynamoDB  (request metadata)
@@ -60,8 +60,9 @@ v1 uses PostgreSQL with pgvector as the vector store. It demonstrates the same R
 
 - Least-privilege IAM scoped to specific model invocations
 - Private subnets, VPC endpoints, no public IPs on tasks
-- Bedrock Guardrails: prompt-attack detection, PII masking, contextual grounding
-- Own prompt-injection test suite (Guardrails are not treated as complete protection)
+- Application-layer AI controls (implemented, M7): unforgeable prompt boundaries, citation validation, sensitive-output withholding/redaction
+- Bedrock Guardrails: evaluated against a live baseline in M7.6 and deliberately **not adopted** ([ADR 0005](docs/adr/0005-do-not-adopt-bedrock-guardrails.md))
+- Own adversarial test suite (no single control is treated as complete protection)
 - Redacted logging by default: no full prompts/responses outside labeled synthetic-data dev mode
 - Signed container images (Cosign), SBOM (CycloneDX), IaC scanning (Checkov)
 - Governance: `docs/governance/` — threat model, NIST AI RMF and OWASP LLM Top 10 mappings
@@ -110,24 +111,30 @@ synthetic-data/ Synthetic document corpus (no real data)
 | 4 | Make the release trustworthy: Checkov, TruffleHog, Gitleaks, pip-audit, Trivy container gate, Conftest Terraform policies, CycloneDX SBOMs, OCI provenance, evidence bundle | Done (see [Milestone 4 evidence](docs/security/MILESTONE_4_EVIDENCE.md)); Cosign signing at M5 |
 | 5 | Prove AWS delivery: Terraform foundation, ephemeral ECS deploy, smoke tests, teardown, cost report | Planned |
 | 6 | Operational depth: SQS ingestion with DLQ, OpenTelemetry, red-team findings, demo recording | Complete (observability scope — OpenTelemetry metrics, CloudWatch dashboard/alarms; see [Milestone 6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md)). Baseline collection continues operationally; current maturity and known limitations are documented there, not claimed as mature or as production SLOs. SQS/DLQ ingestion, red-team findings, and demo recording are tracked separately and not part of this closure. |
+| 7 | AI security: adversarial corpus, authorization fix (AUTHZ-01), prompt-boundary and output/citation hardening, live no-Guardrails baseline, Bedrock Guardrails comparison | **Complete - AI-security evaluation and hardening scope** (see [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md)). Qualifiers: ID-01 remains a deployment prerequisite; the application sensitive-output detector retains a known coverage gap (S2); Guardrails were evaluated but not adopted; M7.5/M7.6 are bounded model evaluations, not universal guarantees. |
 
-Stretch goals: Bedrock Guardrails integration, Automated Reasoning policy validation.
+Stretch goals: Automated Reasoning policy validation; Standard-tier contextual grounding once supported by the pinned AWS tooling. (Bedrock Guardrails integration was evaluated in M7.6 and not adopted.)
 Out of scope by decision: Backstage, Kubernetes variant, multi-cloud, SaaS control plane, always-on infrastructure.
 
 ## Known limitations
 
 - All data is synthetic; compliance mappings are alignment exercises, not certifications.
 - Offline evaluations are deterministic behavioral checks, not independent model-graded scores (those arrive with the ephemeral deployment).
-- Tenant isolation is enforced at the retrieval query (tenant, classification and per-document role ACL) and independently by PostgreSQL row-level security. Caller identity currently comes from validated request headers; verified Cognito JWT claims replace that resolver in Milestone 4 without changing call sites.
+- Tenant isolation is enforced at the retrieval query (tenant, classification and per-document role ACL) and independently by PostgreSQL row-level security. Caller identity currently comes from validated request headers (**ID-01, open**): the platform must not be exposed on a network or treated as production-ready until verified identity replaces that resolver.
+- The application sensitive-output detector does not recognize one synthetic internal-key family (M7.5 LIVE-S2); `/v1/generate` output and request input are not checked; there is no per-identity rate limiting. See the residual-risk register in the [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md).
+- Live AI-security results (M7.5, M7.6) are bounded observations of a nondeterministic model (3 repetitions per case), not guarantees.
 - Row-level security is verified only against a real PostgreSQL instance (CI `integration-tests` job, or locally with `TEST_ADMIN_DATABASE_URL` and `TEST_DATABASE_URL` set); those tests skip otherwise. Row security depends on the runtime role being `NOSUPERUSER NOBYPASSRLS` — see FINDINGS.md F-001 for why that is asserted rather than assumed.
 - pgvector is chosen for cost and reproducibility, not maximum-scale search.
-- No cloud environment is kept running; AWS deployments are ephemeral by design.
+- No cloud environment is kept running; AWS deployments are ephemeral by design. The dev runtime is currently costed down (see the [deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md)).
 
 ## Governance documentation
 
 - [Threat model](docs/governance/THREAT_MODEL.md)
 - [NIST AI RMF mapping](docs/governance/NIST_AI_RMF_MAPPING.md)
-- [OWASP LLM Top 10 mapping](docs/governance/OWASP_LLM_TOP_10_MAPPING.md)
+- [OWASP LLM Top 10 (2025) mapping](docs/governance/OWASP_LLM_TOP_10_MAPPING.md)
+- [MITRE ATLAS mapping](docs/governance/MITRE_ATLAS_MAPPING.md)
+- [M7 AI-security evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md) (finding register, scorecard, residual risks, deployment gate)
+- [M7.5 live adversarial baseline](docs/security/M7_5_LIVE_ADVERSARIAL_BASELINE.md) and [M7.6 Guardrails comparison](docs/security/M7_6_GUARDRAILS_COMPARISON.md)
 - [AI incident response runbook](docs/runbooks/AI_INCIDENT_RESPONSE_RUNBOOK.md)
 - [Security findings and remediations](docs/security/FINDINGS.md)
 - [Failure-mode contract](docs/security/FAILURE_MODES.md)
