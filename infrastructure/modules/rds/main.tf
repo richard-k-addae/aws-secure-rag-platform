@@ -116,7 +116,6 @@ resource "aws_db_parameter_group" "this" {
 }
 
 resource "aws_db_instance" "this" {
-  # checkov:skip=CKV_AWS_293: Deletion protection is disabled only to allow the planned dev cost-down teardown. The database holds reproducible synthetic data only (schema in source, documents re-ingestable). Re-enable when the dev environment is recreated. Review by 2026-11-09.
   identifier = local.identifier
 
   engine         = "postgres"
@@ -153,11 +152,8 @@ resource "aws_db_instance" "this" {
   maintenance_window      = "sun:07:30-sun:08:30"
   copy_tags_to_snapshot   = true
 
-  # Dev cost-down: the database holds only reproducible synthetic data, and a
-  # teardown also schedules aws_kms_key.rds for deletion, so a final snapshot
-  # would become unrestorable while still incurring storage cost.
-  deletion_protection       = false
-  skip_final_snapshot       = true
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.identifier}-final"
 
   auto_minor_version_upgrade = true

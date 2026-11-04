@@ -26,13 +26,23 @@ Recreating the environment:
 2. If within 30 days of the cost-down, restore or force-delete the pending
    runtime secret `rag-platform-dev/db/rag-app-runtime` before Terraform can
    reuse its name.
-3. **Remove the temporary `checkov:skip=CKV_AWS_293`** in
-   `infrastructure/modules/rds/main.tf` and restore `deletion_protection =
-   true` / `skip_final_snapshot = false` when RDS deletion protection is
-   restored.
+3. RDS deletion safety is already restored in source
+   (`deletion_protection = true`, `skip_final_snapshot = false`; the
+   temporary `checkov:skip=CKV_AWS_293` was removed during final repository
+   pre-closure), so a recreated instance is protected. A future teardown
+   must again disable deletion protection through a reviewed change.
 4. Rerun the DB bootstrap task (`make db-init` locally) and synthetic
    ingestion (`make ingest`).
 5. ECR images and digests are preserved and should not need rebuilding.
+
+## Open infrastructure cleanup
+
+- **Unused ALB security group** (`aws_security_group.alb` in
+  `infrastructure/modules/security/main.tf`, with its `alb_to_ecs` and
+  `ecs_from_alb` rules): kept from the deferred ALB/TLS phase, attached to
+  nothing, no public ingress. Classified **REMEDIATE** (Checkov CKV2_AWS_5
+  skip marked open); remove in a later reviewed infrastructure change, or
+  re-decide, by 2026-12-04.
 
 ## Planned production flow
 

@@ -140,7 +140,7 @@ locals {
 }
 
 resource "aws_security_group" "alb" {
-  # checkov:skip=CKV2_AWS_5: Reserved for the later controlled ALB/TLS phase; currently has no public ingress and intentionally has no attached resource. Review by 2026-11-09.
+  # checkov:skip=CKV2_AWS_5: REMEDIATE (open, not resolved). Unused security group with no attached resource and no public ingress, kept from the deferred ALB/TLS phase; scheduled for removal together with its alb_to_ecs/ecs_from_alb rules in a later infrastructure cleanup (see docs/runbooks/DEPLOYMENT_RUNBOOK.md). Remediate or re-decide by 2026-12-04.
   name        = "rag-platform-${var.environment}-alb-sg"
   description = "Security group for the application load balancer"
   vpc_id      = var.vpc_id
@@ -151,7 +151,7 @@ resource "aws_security_group" "alb" {
 }
 
 resource "aws_security_group" "ecs" {
-  # checkov:skip=CKV2_AWS_5: Attached to aws_ecs_service in the ECS child module via module output/input; Checkov CKV2_AWS_5 cannot resolve the cross-module attachment. Review by 2026-11-09.
+  # checkov:skip=CKV2_AWS_5: Checkov tool limitation, not a risk acceptance. The group is attached to aws_ecs_service in the ECS child module via module output/input; CKV2_AWS_5 cannot resolve the cross-module attachment.
   name        = "rag-platform-${var.environment}-ecs-sg"
   description = "Security group for ECS Fargate tasks"
   vpc_id      = var.vpc_id

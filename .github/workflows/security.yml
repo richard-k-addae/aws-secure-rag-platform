@@ -33,10 +33,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      # .github/trufflehog-exclude-paths.txt lists three exact files whose
+      # only findings are synthetic, unreachable Postgres URLs: fake
+      # connection strings the telemetry tests plant to prove they are never
+      # leaked, and local docker-compose dev placeholders. Gitleaks still scans
+      # these files; every other path keeps full TruffleHog coverage.
+      # The CLI image is pinned (the action defaults to "latest").
       - name: Secret scan with TruffleHog
         uses: trufflesecurity/trufflehog@24c98ca20e421a6807518f79c5cdd063400774f2 # main pinned 2026-08-04
         with:
-          extra_args: --results=verified,unknown
+          version: 3.99.8
+          extra_args: --results=verified,unknown --exclude-paths=.github/trufflehog-exclude-paths.txt
 
   dependency-audit:
     runs-on: ubuntu-latest
