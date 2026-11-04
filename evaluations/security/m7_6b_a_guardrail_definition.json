@@ -1,0 +1,50 @@
+{
+  "guardrailIdentifier": "4og2m4vup8gv",
+  "name": "rag-platform-m7-eval",
+  "description": "M7.6b-A S2 output-regex isolation: sensitive-information output policy only; no prompt-attack filter; no contextual grounding. Evaluation only; not enforced.",
+  "sensitiveInformationPolicyConfig": {
+    "piiEntitiesConfig": [
+      {
+        "type": "AWS_ACCESS_KEY",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      },
+      {
+        "type": "AWS_SECRET_KEY",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      },
+      {
+        "type": "US_SOCIAL_SECURITY_NUMBER",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      }
+    ],
+    "regexesConfig": [
+      {
+        "name": "INTERNAL_SERVICE_KEY",
+        "description": "Internal service-key family: an uppercase word, two or more uppercase/digit segments and a final segment containing a digit, all underscore-separated.",
+        "pattern": "\\b[A-Z]{3,}(?:_[A-Z0-9]{2,}){2,}_[A-Z0-9]*[0-9][A-Z0-9]*\\b",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      }
+    ]
+  },
+  "crossRegionConfig": {
+    "guardrailProfileIdentifier": "us.guardrail.v1:0"
+  },
+  "blockedInputMessaging": "[M76-GUARDRAIL-INPUT-BLOCKED] The evaluation guardrail blocked this request.",
+  "blockedOutputsMessaging": "[M76-GUARDRAIL-OUTPUT-BLOCKED] The evaluation guardrail blocked this response."
+}

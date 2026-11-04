@@ -50,6 +50,10 @@ CATEGORY_BY_MODULE: dict[str, str] = {
     ADVERSARIAL_MODULE: "Adversarial (offline)",
     # Rules/harness of the M7.5 live baseline, tested offline; no model is run.
     "test_live_baseline_rules": "Live-baseline rules (offline)",
+    # Guarded-mode harness of the M7.6 Guardrails comparison, tested offline.
+    "test_live_guardrails_rules": "Live-guardrails rules (offline)",
+    # Pinned definitions and verdicts of the M7.6b isolation experiments.
+    "test_live_guardrails_tuning": "Live-guardrails tuning rules (offline)",
 }
 
 UNCATEGORIZED = "Uncategorized"
