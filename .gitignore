@@ -11,6 +11,14 @@ tfplan
 tfplan.json
 **/tfplan
 **/tfplan.json
+*.tfplan
+*.tfplan.json
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
 .review-venv/
 dist/
 build/
