@@ -286,25 +286,11 @@
     "payload": "admin",
     "payload_ref": null,
     "check": "header_role_assertion",
-    "expected_behavior": "A caller cannot grant itself a role by sending X-Tenant-Role; asserting 'admin' must not unlock /v1/generate.",
-    "control_status": "not_implemented",
+    "expected_behavior": "Caller-supplied identity headers carry no authority: a verified reader sending X-Tenant-Role: admin and X-Tenant-Id: tenant-b is refused /v1/generate with 403, the same headers without a verified token get 401, and the model is never invoked.",
+    "control_status": "enforced",
     "priority": "P0",
     "atlas": ["AML.T0012"],
     "owasp": ["LLM02:2025"],
-    "notes": "Known gap by design: the dev header resolver is trusted until verified Cognito identity lands. Not reachable today (no ingress). Not fixed in M7.1."
-  },
-  {
-    "id": "ID-01C",
-    "category": "authorization_integrity",
-    "source": "request_headers",
-    "payload": "admin",
-    "payload_ref": null,
-    "check": "header_role_assertion_current",
-    "expected_behavior": "Characterizes current behavior: X-Tenant-Role: admin returns 200 from /v1/generate and invokes the model.",
-    "control_status": "characterization",
-    "priority": "P0",
-    "atlas": ["AML.T0012"],
-    "owasp": ["LLM02:2025"],
-    "notes": "Evidence. Fails once identity comes from verified claims."
+    "notes": "Fixed in M8: tenant and role come only from a verified Cognito access token (RS256 signature, issuer, token_use, client_id, expiry) mapped from admin-managed cognito:groups; the X-Tenant-Id/X-Tenant-Role headers were removed from the identity interface. Promoted from strict xfail (not_implemented, M7.1) to enforced. The vulnerable-behavior characterization ID-01C (header role assertion returned 200) was retired with the fix. Authoritative verifier proof: app/tests/test_oidc_verification.py and app/tests/test_identity_mapping.py."
   }
 ]

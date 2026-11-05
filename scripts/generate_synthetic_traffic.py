@@ -67,44 +67,50 @@ def main() -> None:
     print("1. Sending HTTP traffic to API...")
     send_http(f"{api_url}/healthz")
 
-    # Security rejections through API
+    # Security rejections through API (M8: identity is a verified Bearer token).
     send_http(f"{api_url}/v1/query", method="POST", data={"question": "hello"})
-    # 401 missing_tenant
+    # 401 missing_token
     send_http(
         f"{api_url}/v1/query",
         method="POST",
-        headers={"X-Tenant-Id": "unknown"},
+        headers={"Authorization": "Bearer not-a-jwt"},
         data={"question": "hello"},
     )
-    # 403 unknown_tenant
-    send_http(
-        f"{api_url}/v1/query",
-        method="POST",
-        headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "unknown"},
-        data={"question": "hello"},
-    )
-    # 403 unknown_role
-    send_http(
-        f"{api_url}/v1/generate",
-        method="POST",
-        headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
-        data={"prompt": "hello"},
-    )
-    # 403 action_denied
-    send_http(
-        f"{api_url}/v1/documents/ingest",
-        method="POST",
-        headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"},
-        data={"source": "threat.md", "classification": "restricted"},
-    )
-    # 403 classification_denied
-    send_http(
-        f"{api_url}/v1/documents/ingest",
-        method="POST",
-        headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"},
-        data={"source": "../../escape.md", "classification": "internal"},
-    )
-    # 400 path_rejected
+    # 401 malformed_token
+
+    # Authenticated paths need real access tokens for the configured issuer,
+    # supplied at runtime only (never embedded or printed). Cases without a
+    # token are skipped.
+    tokens = {
+        role: os.environ.get(f"SYNTHETIC_{role.upper()}_TOKEN", "")
+        for role in ("reader", "ingestor", "admin")
+    }
+
+    def auth(role: str) -> dict[str, str] | None:
+        return {"Authorization": f"Bearer {tokens[role]}"} if tokens[role] else None
+
+    authenticated: list[tuple[str, str, dict[str, object]]] = [
+        # 403 action_denied
+        ("reader", "/v1/generate", {"prompt": "hello"}),
+        # 403 classification_denied
+        (
+            "ingestor",
+            "/v1/documents/ingest",
+            {"source": "threat.md", "classification": "restricted"},
+        ),
+        # 400 path_rejected
+        (
+            "admin",
+            "/v1/documents/ingest",
+            {"source": "../../escape.md", "classification": "internal"},
+        ),
+    ]
+    for role, path, payload in authenticated:
+        headers = auth(role)
+        if headers is None:
+            print(f"   skipped {path} as {role}: SYNTHETIC_{role.upper()}_TOKEN not set")
+            continue
+        send_http(f"{api_url}{path}", method="POST", headers=headers, data=payload)
 
     # 2. Configure local telemetry exporter to send RAG/GenAI metrics & spans to collector
     print("2. Emitting RAG, GenAI, Retrieval, and Ingestion telemetry to OTLP collector...")

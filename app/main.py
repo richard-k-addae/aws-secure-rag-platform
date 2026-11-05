@@ -1,8 +1,8 @@
 """FastAPI application entrypoint.
 
-Phase 1-2: health, generate, and RAG query endpoints.
-Phase 4 adds Cognito JWT middleware, rate limiting, and document-level
-authorization (see app/auth/).
+Health, generate, RAG query and ingestion endpoints. Every /v1 route
+authenticates a Cognito access token and derives tenant and role from its
+verified groups before any authorization decision (see app/auth/).
 """
 from collections.abc import Awaitable, Callable
 

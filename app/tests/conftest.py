@@ -4,10 +4,15 @@ from unittest.mock import MagicMock
 from app.auth.permissions import Classification, Role, allowed_classifications
 from app.auth.tenancy import TenantContext
 from app.clients.bedrock import BedrockService
+from app.tests.identity import bearer, install_test_verifier
 
-TENANT_A_HEADERS = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"}
-TENANT_B_HEADERS = {"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "reader"}
-ADMIN_A_HEADERS = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"}
+# Signed synthetic access tokens from the deterministic test issuer
+# (app/tests/identity.py). Tenant and role come from verified groups.
+TENANT_A_HEADERS = bearer("tenant-a", "reader")
+TENANT_B_HEADERS = bearer("tenant-b", "reader")
+ADMIN_A_HEADERS = bearer("tenant-a", "admin")
+INGESTOR_A_HEADERS = bearer("tenant-a", "ingestor")
+INGESTOR_B_HEADERS = bearer("tenant-b", "ingestor")
 
 
 def context(tenant_id: str = "tenant-a", role: Role = Role.READER) -> TenantContext:
@@ -35,10 +40,13 @@ def chunk(source: str = "policy.md", content: str = "Retention is 7 years.") -> 
 
 __all__ = [
     "ADMIN_A_HEADERS",
+    "INGESTOR_A_HEADERS",
+    "INGESTOR_B_HEADERS",
     "TENANT_A_HEADERS",
     "TENANT_B_HEADERS",
     "Classification",
     "chunk",
     "context",
+    "install_test_verifier",
     "make_bedrock",
 ]

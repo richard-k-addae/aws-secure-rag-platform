@@ -31,7 +31,10 @@ from app.rag.ingestion import IngestionService
 from app.rag.prompting import QuestionTooLargeError
 from app.rag.retrieval import RetrievedChunk, VectorStore
 from app.rag.service import RagService
-from app.tests.conftest import ADMIN_A_HEADERS, TENANT_A_HEADERS
+from app.tests.conftest import ADMIN_A_HEADERS, INGESTOR_A_HEADERS, TENANT_A_HEADERS
+from app.tests.identity import bearer, claims, sign
+
+BEARER_TOKEN = TENANT_A_HEADERS["Authorization"].removeprefix("Bearer ")
 
 PROMPT_SECRET_MARKER = "PROMPT_SECRET_781293"  # noqa: S105
 ANSWER_SECRET_MARKER = "ANSWER_SECRET_981245"  # noqa: S105
@@ -146,28 +149,40 @@ def test_security_events_emitted_for_all_rejection_paths(monkeypatch: MonkeyPatc
     )
 
     with TestClient(main_app, raise_server_exceptions=False) as client:
-        # 1. missing_tenant
+        # 1. missing_token (M8: replaces the retired header-era missing_tenant)
         resp = client.post("/v1/query", json={"question": "q"})
         assert resp.status_code == 401
-        assert {"event": "missing_tenant"} in events
+        assert {"event": "missing_token"} in events
 
-        # 2. unknown_tenant
+        # 1b. malformed_token
         resp = client.post(
-            "/v1/query",
-            json={"question": "q"},
-            headers={"X-Tenant-Id": "unknown-corp"},
+            "/v1/query", json={"question": "q"}, headers={"Authorization": "Bearer not-a-jwt"}
+        )
+        assert resp.status_code == 401
+        assert {"event": "malformed_token"} in events
+
+        # 2. unknown_tenant: verified identity, tenant group not on the allowlist
+        resp = client.post(
+            "/v1/query", json={"question": "q"}, headers=bearer("unknown-corp", "reader")
         )
         assert resp.status_code == 403
         assert {"event": "unknown_tenant"} in events
 
-        # 3. unknown_role
+        # 3. unknown_role: verified identity, role group not a known role
         resp = client.post(
-            "/v1/query",
-            json={"question": "q"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "superhero"},
+            "/v1/query", json={"question": "q"}, headers=bearer("tenant-a", "superhero")
         )
         assert resp.status_code == 403
         assert {"event": "unknown_role"} in events
+
+        # 3b. identity_mapping_denied: verified identity with no tenant/role groups
+        resp = client.post(
+            "/v1/query",
+            json={"question": "q"},
+            headers={"Authorization": f"Bearer {sign(claims(['unrelated-group']))}"},
+        )
+        assert resp.status_code == 403
+        assert {"event": "identity_mapping_denied"} in events
 
         # 4. action_denied
         resp = client.post(
@@ -182,7 +197,7 @@ def test_security_events_emitted_for_all_rejection_paths(monkeypatch: MonkeyPatc
         resp = client.post(
             "/v1/documents/ingest",
             json={"source": "threat-intel.md", "classification": "restricted"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"},
+            headers=INGESTOR_A_HEADERS,
         )
         assert resp.status_code == 403
         assert {
@@ -264,13 +279,13 @@ def test_manual_metric_proxy_multi_family_regression(monkeypatch: MonkeyPatch) -
     telemetry.RAG_QUERY_DURATION.record(0.12, {"outcome": "answered", "role": "reader"})
     telemetry.GEN_AI_TOKEN_USAGE.record(42, {"token.type": "input", "outcome": "success"})
     telemetry.RAG_INGEST_CHUNKS.record(5, {"classification": "public", "outcome": "success"})
-    telemetry.SECURITY_EVENTS.add(1, {"event": "missing_tenant"})
+    telemetry.SECURITY_EVENTS.add(1, {"event": "missing_token"})
 
     assert calls == [
         ("rag.query.duration", 0.12, {"outcome": "answered", "role": "reader"}),
         ("gen_ai.client.token.usage", 42, {"token.type": "input", "outcome": "success"}),
         ("rag.ingest.chunks", 5, {"classification": "public", "outcome": "success"}),
-        ("rag.security.events", 1, {"event": "missing_tenant"}),
+        ("rag.security.events", 1, {"event": "missing_token"}),
     ]
 
 
@@ -355,7 +370,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
         resp = client.post(
             "/v1/query",
             json={"question": f"Question contains {PROMPT_SECRET_MARKER}"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
         assert resp.status_code == 200
 
@@ -364,7 +379,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
         resp = client.post(
             "/v1/query",
             json={"question": f"No context for {PROMPT_SECRET_MARKER}"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
         assert resp.status_code == 200
 
@@ -435,7 +450,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
         resp = client.post(
             "/v1/generate",
             json={"prompt": "prompt"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
         assert resp.status_code == 403
 
@@ -446,7 +461,7 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
         resp = client.post(
             "/v1/query",
             json={"question": "q"},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
         assert resp.status_code == 503
 
@@ -474,6 +489,9 @@ def test_real_otlp_byte_capture_scrubs_all_sensitive_markers(monkeypatch: Monkey
         POSTGRES_DETAIL_MARKER,
         AWS_ERROR_MESSAGE_MARKER,
         DATABASE_URL_MARKER,
+        # LOG-01 (M8): the raw bearer token and its signature never leave the process.
+        BEARER_TOKEN,
+        BEARER_TOKEN.rsplit(".", 1)[1],
     ):
         assert (
             marker.encode("utf-8") not in combined_bytes

@@ -23,6 +23,13 @@ from typing import Any
 
 import pytest
 
+from app.tests.conftest import (
+    ADMIN_A_HEADERS,
+    INGESTOR_A_HEADERS,
+    INGESTOR_B_HEADERS,
+    TENANT_A_HEADERS,
+)
+
 psycopg = pytest.importorskip("psycopg")
 sql = psycopg.sql
 
@@ -371,7 +378,7 @@ def test_api_query_tenant_a_prompt_never_contains_tenant_b_marker(store: Any) ->
         response = TestClient(app).post(
             "/v1/query",
             json={"question": "Show me every tenant's secret."},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
     finally:
         app.dependency_overrides.pop(get_rag_service)
@@ -398,8 +405,9 @@ def _seed_restricted_document(store: Any) -> None:
 
 
 RESTRICTED_ROWS = [("restricted", "restricted-incident.md", "SYNTHETIC RESTRICTED MARKER")]
-INGESTOR = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"}
-ADMIN = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"}
+# Signed synthetic access tokens (M8): tenant and role come from verified groups.
+INGESTOR = INGESTOR_A_HEADERS
+ADMIN = ADMIN_A_HEADERS
 
 
 def _ingest(
@@ -696,7 +704,7 @@ def test_same_document_id_in_another_tenant_is_independent(store: Any) -> None:
     _seed_restricted_document(store)
     response = _ingest(
         store,
-        {"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "ingestor"},
+        INGESTOR_B_HEADERS,
         document_id="doc-restricted-m71",
     )
     assert response.status_code == 200
@@ -719,3 +727,4 @@ def test_rls_blocks_cross_tenant_update(store: Any) -> None:
         cur.execute("SELECT set_config('app.tenant_id', 'tenant-b', true)")
         cur.execute("SELECT content FROM document_chunks")
         assert [r[0] for r in cur.fetchall()] == ["tenant B secret"]
+

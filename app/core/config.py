@@ -5,8 +5,9 @@ text model that supports the Converse API and any Bedrock embedding model,
 demonstrating model portability.
 """
 from functools import lru_cache
+from urllib.parse import urlsplit
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The published /v1/query question limit. QueryRequest uses this constant as
@@ -53,13 +54,39 @@ class Settings(BaseSettings):
     chunk_max_chars: int = 1200
     chunk_overlap_chars: int = 150
 
-    # Tenancy (dev resolver only; replaced by verified Cognito claims in M4)
+    # Tenancy. A verified identity's tenant group must also be listed here.
     tenant_allowlist: str = "tenant-a,tenant-b"
-    default_tenant_role: str = "reader"
+
+    # Verified identity (M8): Cognito user pool access tokens. All values are
+    # trusted server configuration; nothing here is ever taken from a token.
+    # Empty issuer or client IDs leave authentication unconfigured, which fails
+    # closed (protected routes answer 503).
+    oidc_issuer: str = ""
+    oidc_client_ids: str = ""
+    # Only for access tokens requested with a resource binding (they carry aud).
+    oidc_audience: str = ""
+    oidc_leeway_seconds: int = Field(default=30, ge=0, le=120)
+    oidc_jwks_cache_ttl_seconds: int = Field(default=300, ge=30, le=86400)
+    oidc_jwks_refresh_cooldown_seconds: int = Field(default=30, ge=1, le=3600)
+
+    @field_validator("oidc_issuer")
+    @classmethod
+    def _issuer_is_https(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return value
+        parsed = urlsplit(value)
+        if parsed.scheme != "https" or not parsed.netloc or parsed.query or parsed.fragment:
+            raise ValueError("OIDC_ISSUER must be an https URL without query or fragment")
+        return value
 
     @property
     def tenant_allowlist_values(self) -> frozenset[str]:
         return frozenset(t.strip() for t in self.tenant_allowlist.split(",") if t.strip())
+
+    @property
+    def oidc_client_id_values(self) -> frozenset[str]:
+        return frozenset(c.strip() for c in self.oidc_client_ids.split(",") if c.strip())
 
 
 @lru_cache
