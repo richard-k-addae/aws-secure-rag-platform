@@ -1,0 +1,3 @@
+^app/tests/test_telemetry\.py$
+^app/tests/test_m6_2_observability\.py$
+^docker-compose\.yml$

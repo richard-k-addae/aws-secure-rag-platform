@@ -1,0 +1,22 @@
+# Gitleaks exact-fingerprint allowlist (commit:file:rule:line).
+# Each entry suppresses one specific historical finding only; any new or
+# changed occurrence is still reported. Secret scanning is otherwise unchanged.
+# Reviewed 2026-11-04 (final repository pre-closure).
+
+# Synthetic 32-hex prompt-boundary tokens used as deterministic test fixtures
+# for the M7.2 boundary framing ("0123456789abcdef" * 2 style); not credentials.
+9f6aee7980d6cb8ddd4335cc4fbf3b85457fd107:app/tests/test_prompting.py:generic-api-key:22
+9f6aee7980d6cb8ddd4335cc4fbf3b85457fd107:app/tests/test_prompting.py:generic-api-key:23
+9f6aee7980d6cb8ddd4335cc4fbf3b85457fd107:evaluations/tests/test_adversarial_offline.py:generic-api-key:128
+
+# Synthetic marker string the M6 telemetry tests inject to prove prompt text
+# never reaches logs, spans or metrics; not a credential.
+71e81e866eadeee347d42ca464d9e398c7c78f70:app/tests/test_m6_2_observability.py:generic-api-key:35
+c0cb4e07cd100c538f8d11cbf80517dc63f99c39:app/tests/test_m6_2_observability.py:generic-api-key:35
+6a85bcc29690446b7f8b5413545474f8c775b33e:app/tests/test_m6_2_observability.py:generic-api-key:35
+
+# Public Go module checksum (go.sum "h1:" hash for golang.org/x/oauth2) inside
+# the patched ADOT build patch; a content hash, not a credential.
+9cde4fa0acc0c877a7f36c92b8fcb92806b26f26:tools/adot/patches/adot-v0.50.0-security.patch:generic-api-key:82
+6a85bcc29690446b7f8b5413545474f8c775b33e:tools/adot/patches/adot-v0.50.0-security.patch:generic-api-key:82
+89dff789342731b4835e1416ac7e7269c39db5f0:tools/adot/patches/adot-v0.50.0-security.patch:generic-api-key:82

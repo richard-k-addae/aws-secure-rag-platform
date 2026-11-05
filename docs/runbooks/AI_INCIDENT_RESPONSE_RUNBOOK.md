@@ -3,6 +3,14 @@
 Covers AI-specific incidents. General infrastructure incidents (service
 down, database failure) follow standard ECS/RDS operational procedures.
 
+> **Applicability (M7.7):** steps that reference Bedrock Guardrails,
+> Cognito, API Gateway, rate limits, SQS or ingestion-time content
+> validation describe the target architecture; none of these is deployed.
+> Guardrails were evaluated and not adopted (ADR 0005); identity is
+> header-based (ID-01, open). Today, detection relies on application
+> signals: `query_answer_withheld` events (bounded `reason`, e.g.
+> `sensitive_output`, `uncited`), RAG/Bedrock metrics and logs.
+
 ## Severity levels
 
 - SEV1: Confirmed sensitive-data disclosure or successful injection reaching users

@@ -7,6 +7,11 @@ class HealthResponse(BaseModel):
 
 
 class Citation(BaseModel):
+    # Citation.index is a required response-contract addition (M7.3) that maps
+    # answer citation markers such as [3] to the corresponding citation
+    # object. The server always populates it; citations list only passages
+    # the answer validly cites, so list position no longer implies the index.
+    index: int
     source: str
     chunk_index: int
     score: float

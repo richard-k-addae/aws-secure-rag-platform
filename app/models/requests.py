@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth.permissions import Classification, Role
+from app.core.config import MAX_QUESTION_CHARS
 
 
 class QueryRequest(BaseModel):
@@ -13,7 +14,9 @@ class QueryRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    question: str = Field(min_length=1, max_length=8000)
+    # Same constant the runtime limit is bounded by, so the published contract
+    # and the enforced limit cannot drift apart.
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
     top_k: int | None = Field(default=None, ge=1, le=20)
 
 

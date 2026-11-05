@@ -6,7 +6,13 @@ demonstrating model portability.
 """
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# The published /v1/query question limit. QueryRequest uses this constant as
+# its schema max_length, so the API contract and the runtime check share one
+# number. Settings may tighten the runtime limit but never loosen it past it.
+MAX_QUESTION_CHARS = 4000
 
 
 class Settings(BaseSettings):
@@ -20,7 +26,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     # Full prompt/response logging is only permitted in dev with synthetic data.
     log_full_content: bool = False
+    # Size of the whole user message sent to the model (framing, question and
+    # retrieved passages; the fixed system prompt is not counted). Retrieved
+    # passages are fitted into whatever the question and framing leave over.
     max_input_chars: int = 8000
+    # Limit on the caller's own question for /v1/query, enforced twice: by the
+    # QueryRequest schema (422) and, for direct service callers, by RagService
+    # before any retrieval (QuestionTooLargeError -> 413 + prompt_too_large).
+    # Chosen so a maximal question still leaves room for at least one
+    # worst-case passage; test_prompt_budget.py asserts that guarantee.
+    max_question_chars: int = Field(default=MAX_QUESTION_CHARS, ge=1, le=MAX_QUESTION_CHARS)
     max_output_tokens: int = 1024
 
     # Vector store (local dev defaults; production values come from Secrets Manager)

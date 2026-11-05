@@ -1,0 +1,87 @@
+{
+  "name": "rag-platform-m7-eval",
+  "description": "M7.6 evaluation-only guardrail; not enforced on any runtime path. Prompt-attack detection, output-side sensitive-information masking and contextual grounding checks.",
+  "contentPolicyConfig": {
+    "filtersConfig": [
+      {
+        "type": "PROMPT_ATTACK",
+        "inputStrength": "HIGH",
+        "outputStrength": "NONE",
+        "inputAction": "BLOCK",
+        "outputAction": "NONE",
+        "inputEnabled": true,
+        "outputEnabled": false,
+        "inputModalities": ["TEXT"]
+      }
+    ],
+    "tierConfig": {
+      "tierName": "STANDARD"
+    }
+  },
+  "sensitiveInformationPolicyConfig": {
+    "piiEntitiesConfig": [
+      {
+        "type": "AWS_ACCESS_KEY",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      },
+      {
+        "type": "AWS_SECRET_KEY",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      },
+      {
+        "type": "US_SOCIAL_SECURITY_NUMBER",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      }
+    ],
+    "regexesConfig": [
+      {
+        "name": "INTERNAL_SERVICE_KEY",
+        "description": "Internal service-key family: an uppercase word, two or more uppercase/digit segments and a final segment containing a digit, all underscore-separated.",
+        "pattern": "\\b[A-Z]{3,}(?:_[A-Z0-9]{2,}){2,}_[A-Z0-9]*[0-9][A-Z0-9]*\\b",
+        "action": "ANONYMIZE",
+        "inputAction": "NONE",
+        "outputAction": "ANONYMIZE",
+        "inputEnabled": false,
+        "outputEnabled": true
+      }
+    ]
+  },
+  "contextualGroundingPolicyConfig": {
+    "filtersConfig": [
+      {
+        "type": "GROUNDING",
+        "threshold": 0.7,
+        "action": "BLOCK",
+        "enabled": true
+      },
+      {
+        "type": "RELEVANCE",
+        "threshold": 0.7,
+        "action": "BLOCK",
+        "enabled": true
+      }
+    ]
+  },
+  "crossRegionConfig": {
+    "guardrailProfileIdentifier": "us.guardrail.v1:0"
+  },
+  "blockedInputMessaging": "[M76-GUARDRAIL-INPUT-BLOCKED] The evaluation guardrail blocked this request.",
+  "blockedOutputsMessaging": "[M76-GUARDRAIL-OUTPUT-BLOCKED] The evaluation guardrail blocked this response.",
+  "tags": [
+    {"key": "project", "value": "aws-secure-rag-platform"},
+    {"key": "milestone", "value": "M7.6"},
+    {"key": "purpose", "value": "evaluation-only"}
+  ]
+}

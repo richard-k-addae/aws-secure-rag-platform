@@ -3,7 +3,5 @@ directory:
   - infrastructure
 quiet: true
 skip-check:
-  # CKV2_AWS_11: VPC flow logs land with the full networking build-out (Phase 2)
-  - CKV2_AWS_11
   # CKV2_AWS_12: default SG is already restricted to no ingress/egress
   - CKV2_AWS_12

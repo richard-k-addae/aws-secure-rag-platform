@@ -1,6 +1,6 @@
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.11-slim-trixie@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.1 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.12.1@sha256:cf4eedcaa81655197f625739489effcbe71b61ceb1506f332c3facae5deceded /uv /uvx /bin/
 
 WORKDIR /srv
 
@@ -10,7 +10,7 @@ COPY app/ ./app/
 RUN uv sync --locked --no-dev --no-editable \
     && rm -rf /root/.cache/uv
 
-FROM python:3.11-slim-bookworm AS runtime
+FROM python:3.11-slim-trixie@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS runtime
 
 RUN groupadd -r app \
     && useradd -r -g app app \

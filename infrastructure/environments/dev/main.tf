@@ -5,9 +5,79 @@ module "networking" {
 }
 
 # Phase 2:
-# module "rds"       { source = "../../modules/rds" ... }
-# module "ecs"       { source = "../../modules/ecs" ... }
 # module "cognito"   { source = "../../modules/cognito" ... }
 # module "storage"   { source = "../../modules/storage" ... }
 # module "messaging" { source = "../../modules/messaging" ... }
-# module "security"  { source = "../../modules/security" ... }
+
+module "ecr" {
+  source          = "../../modules/ecr"
+  repository_name = "aws-secure-rag-platform"
+  environment     = var.environment
+}
+
+module "ecr_adot" {
+  source          = "../../modules/ecr"
+  repository_name = "rag-platform-adot"
+  environment     = var.environment
+  kms_alias_name  = "alias/rag-platform-${var.environment}-ecr-adot"
+}
+
+module "observability" {
+  source      = "../../modules/observability"
+  environment = var.environment
+}
+
+module "security" {
+  source                 = "../../modules/security"
+  environment            = var.environment
+  vpc_id                 = module.networking.vpc_id
+  private_subnet_ids     = module.networking.private_subnet_ids
+  private_route_table_id = module.networking.private_route_table_id
+
+  ecr_repository_arn                = module.ecr.repository_arn
+  adot_ecr_repository_arn           = module.ecr_adot.repository_arn
+  bedrock_inference_profile_id      = var.bedrock_inference_profile_id
+  bedrock_generation_model_id       = var.bedrock_generation_model_id
+  bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
+  bedrock_embedding_model_id        = var.bedrock_embedding_model_id
+}
+
+module "ecs" {
+  source      = "../../modules/ecs"
+  environment = var.environment
+
+  private_subnet_ids    = module.networking.private_subnet_ids
+  ecs_security_group_id = module.security.ecs_security_group_id
+
+  ecr_repository_arn = module.ecr.repository_arn
+  ecr_repository_url = module.ecr.repository_url
+  image_digest       = var.app_image_digest
+
+  adot_ecr_repository_arn = module.ecr_adot.repository_arn
+  adot_ecr_repository_url = module.ecr_adot.repository_url
+  adot_image_digest       = var.adot_image_digest
+  metrics_log_group_arn   = module.observability.metrics_log_group_arn
+  adot_config_content     = module.observability.adot_collector_config
+
+  bedrock_inference_profile_id      = var.bedrock_inference_profile_id
+  bedrock_generation_model_id       = var.bedrock_generation_model_id
+  bedrock_inference_profile_regions = var.bedrock_inference_profile_regions
+  bedrock_embedding_model_id        = var.bedrock_embedding_model_id
+
+  db_bootstrap_image_digest = var.db_bootstrap_image_digest
+  db_host                   = module.rds.endpoint_address
+  db_port                   = module.rds.port
+  db_name                   = module.rds.db_name
+  db_master_secret_arn      = module.rds.master_user_secret_arn
+  db_runtime_secret_arn     = module.rds.runtime_secret_arn
+  db_kms_key_arn            = module.rds.kms_key_arn
+}
+
+module "rds" {
+  source      = "../../modules/rds"
+  environment = var.environment
+
+  vpc_id                = module.networking.vpc_id
+  private_subnet_ids    = module.networking.private_subnet_ids
+  ecs_security_group_id = module.security.ecs_security_group_id
+}
