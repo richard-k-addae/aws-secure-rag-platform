@@ -5,6 +5,14 @@ is project completion for the M7 scope, **not** production deployment
 readiness and not a certification. ID-01 remains open and is a deployment
 prerequisite (see "Deployment gate").
 
+> **M8 update (2026-11-05).** ID-01 is now **ENFORCED at the code and
+> PostgreSQL integration-test level**: tenant and role come only from a
+> verified Cognito access token, and the identity headers were removed.
+> **Real Cognito verification has NOT been executed**, and no deployment runs
+> the M8 code. Rows below marked "M8" are living register entries; the M7
+> evidence rows and the M7.5/M7.6 reports are kept as the historical record.
+> Full M8 evidence: [M8 identity evidence](M8_IDENTITY_EVIDENCE.md).
+
 Closed 2026-11-04 on branch `m6/observability` (M7 commits `773b6ba`
 M7.1, `59dbb36` M7.4a, `9f6aee7` M7.2, `e4306f2` M7.3, `d16af07`/`158a3cd`
 M7.5, `962b6ab` M7.6). Every row cites evidence that exists in the
@@ -36,7 +44,7 @@ model-dependent** (bounded Bedrock runs; observations, not guarantees).
 | M7.6 | Classic contextual grounding | EVALUATED / NOT ADOPTED | M7.6a | 5/6 answerable/conflict runs refused | Live / model-dependent | - | Rejected for this use case |
 | M7.6 | Output sensitive-information regex (S2 family) | EVALUATED / NOT ADOPTED | M7.6b-A | S2 exposure 0/3; anonymized 2/2 observed emissions; verdict INCONCLUSIVE | Live / model-dependent | Exercised twice; written for a known key family | Not adopted; candidate for a future pre-registered run |
 | M7.6 | Standard contextual grounding | DEFERRED | - | Not run | - | Not exposed by AWS CLI 2.34.30 / botocore 1.43.63 | Deferred until pinned tooling supports it |
-| M7 | ID-01 caller-controlled identity | OPEN FINDING | `app/auth/tenancy.py` | Corpus ID-01 strict xfail; ID-01C characterization | Deterministic | - | Open; deployment gate (R1) |
+| M7 → M8 | ID-01 caller-controlled identity | **ENFORCED (code and PostgreSQL integration level, M8)**; live Cognito NOT EXECUTED | `app/auth/oidc.py`, `app/auth/tenancy.py` | M7: corpus ID-01 strict xfail, ID-01C characterization. M8: corpus ID-01 enforced (ID-01C retired); see [M8 evidence](M8_IDENTITY_EVIDENCE.md) | Deterministic | Not verified against real Cognito; not deployed | Closed in code; live verification and deployment prerequisites open (R1, R14-R16) |
 | M7 | Model training / fine-tuning attacks | OUT OF SCOPE | [Threat model](../governance/THREAT_MODEL.md) | - | - | No training occurs | Out of scope |
 
 The evaluation guardrail used in M7.6 (`4og2m4vup8gv`) was deleted on
@@ -51,7 +59,7 @@ application configuration, IAM policy, Terraform state or deployment.
 | IPI structural injection findings (IPI-02..06) | **CONFIRMED COMPLETE** | M7.2 boundary framing; corpus enforced; `app/tests/test_prompting.py` | Structural; model behaviour measured separately (M7.5 indirect 12/12 resisted) |
 | Citation integrity (OUT-01) | **CONFIRMED COMPLETE** | M7.3; `app/tests/test_output_integrity.py` | `/v1/query` |
 | Sensitive-output detector gap (S2) | **OPEN FINDING** | M7.5 LIVE-S2 reached the caller 3/3 without Guardrails | M7.6 output regex promising but INCONCLUSIVE under the pre-registered rule; not adopted |
-| ID-01 caller-controlled identity | **OPEN FINDING** | Tenant/role still derive from `X-Tenant-Id` / `X-Tenant-Role` headers | Deployment blocker |
+| ID-01 caller-controlled identity | **ENFORCED (code and PostgreSQL integration level, M8)** | M8: tenant/role only from verified Cognito access-token `cognito:groups`; headers removed; [M8 evidence](M8_IDENTITY_EVIDENCE.md) | Real Cognito verification NOT EXECUTED; not deployed. (M7 status: open finding, header-derived identity.) |
 | Classic contextual grounding | **EVALUATED / NOT ADOPTED** | M7.6a | Unacceptable refusals |
 | Prompt-attack Guardrail HIGH | **EVALUATED / NOT ADOPTED** | M7.6a | Over-blocking, false positive on G4 |
 | Prompt-attack Guardrail MEDIUM | **EVALUATED / NOT ADOPTED** | M7.6b-B | No usability improvement |
@@ -66,7 +74,7 @@ percentage.
 
 | Evaluation | Result |
 |---|---|
-| Deterministic adversarial corpus (M7.1, CI) | 22 cases: 20 enforced, 1 characterization (ID-01C), 1 strict xfail (**ID-01**, the only remaining) |
+| Deterministic adversarial corpus (M7.1, CI) | At M7 closure: 22 cases: 20 enforced, 1 characterization (ID-01C), 1 strict xfail (**ID-01**). **After M8: 21 cases, all enforced** (ID-01 promoted, ID-01C retired) |
 | M7.5 live baseline, no Guardrails | 54/54 calls: 33 `model_resisted`, 15 `model_correct`, 3 `application_blocked` (S1), 3 `model_failed` (S2), 0 runtime errors |
 | M7.6a Guardrails v1 | 54/54 calls; 47 guardrail interventions; 0 unsafe final outcomes; unacceptable false refusals (5/6 answerable/conflict runs) and false positives (G4 3/3) |
 | M7.6b-A S2 output-regex isolation | S2 final exposure 0/3; regex intervened on 2/2 observed emissions; verdict **INCONCLUSIVE** |
@@ -86,7 +94,7 @@ decision, not an unfinished implementation.
 
 | # | Risk | Detail | Disposition |
 |---|---|---|---|
-| R1 | **ID-01** caller-controlled tenant/role | Identity from validated request headers, not verified credentials | Open; **deployment blocker** for any network exposure |
+| R1 | **ID-01** identity | M7: identity from request headers. M8: verified Cognito access tokens, enforced in code and tested against real PostgreSQL; **real Cognito verification NOT EXECUTED** and no approved production identity provider exists | Code-level control **enforced**; live verification **open**; remains a **deployment blocker** until verified live and deployed with R14-R16 resolved |
 | R2 | **S2 detector coverage** | Application detector does not recognize one synthetic internal-key family; M7.6 regex showed potential but is not adopted or proven | Open |
 | R3 | `LOG_FULL_CONTENT` | Development-only raw prompt/response logging (`app_env == "dev"`) remains a disclosure surface | Accepted for dev; must stay off elsewhere |
 | R4 | Standard contextual grounding | Not evaluated: not exposed by pinned AWS tooling | Deferred |
@@ -94,18 +102,25 @@ decision, not an unfinished implementation.
 | R6 | No ingestion-time content scanning | Authorized writers can store malicious or poisoned text | Open (structural confinement only) |
 | R7 | No per-identity rate limiting / quotas | Size and token limits exist; throttling relies on Bedrock 503 handling | Open |
 | R8 | CI verification of this branch | `ci.yml`/`security.yml` run on `pull_request` and pushes to `main`; `m6/observability` has no workflow runs. The latest scheduled `Security` run on `main` (2026-11-02) failed: pip-audit (`urllib3` 2.7.0 on `main`; this branch pins 2.8.0), gitleaks (5 hits on synthetic test constants), TruffleHog (scheduled run with base == head) and Trivy | Open: open a PR to run CI on this branch and triage these jobs |
-| R9 | Review deadlines on 2026-11-09 | All `.trivyignore.yaml` entries expire and all Checkov skips (including the temporary `CKV_AWS_293`) carry "Review by 2026-11-09" | Open: review before that date |
-| R10 | Operator identity | Terraform and evaluations run as a long-lived IAM user with AdministratorAccess; CI OIDC not implemented | Open |
+| R9 | Review deadlines on 2026-12-04 | All 9 `.trivyignore.yaml` entries expire on 2026-12-04 and the Checkov skips carry "review by 2026-12-04" (renewed at final pre-closure; the temporary `CKV_AWS_293` was removed). The unused ALB security group (CKV2_AWS_5, REMEDIATE) has the same deadline | Open: review before 2026-12-04 |
+| R10 | Operator identity | Terraform and evaluations run as a long-lived IAM user with AdministratorAccess; CI OIDC not implemented. See R17 for the account placement | Open |
 | R11 | Container image signing | Not implemented as a pipeline control (known gap in M4/M6.4 evidence) | Open |
 | R12 | ATLAS taxonomy maintenance | Corpus ATLAS tags (including `AML.T0056`/`AML.T0057`) are historical identifiers kept for evidence integrity; related current techniques are recorded as crosswalks | Documented; re-review tags against the current taxonomy as governance maintenance |
 | R13 | Model-dependent evidence | M7.5/M7.6 are bounded observations (3 repetitions, synthetic data), not universal guarantees | Inherent; re-measure on model change |
+| R14 | **JWKS connectivity (M8)** | ECS tasks run in private subnets with no NAT and egress only to VPC endpoints (ECR, Logs, Bedrock Runtime, Secrets Manager, S3); the Cognito JWKS endpoint is unreachable, so every protected route would fail closed with 503. A Cognito interface endpoint is **not assumed** to serve the JWKS path until validated | Open; **deployment blocker** |
+| R15 | Revocation and group-change lag (M8) | Verification is stateless: a revoked token or removed group remains effective until the access token expires | Open; mitigate with short access-token lifetimes; to be measured by M8.5 R-16/R-17 |
+| R16 | **Pre-M8 image digest (M8)** | The dev `app_image_digest` and `db_bootstrap_image_digest` (`sha256:05c5…`, commit `1194012`) contain the header-trusting identity code; redeploying them would reintroduce ID-01 | Open; **deployment blocker**: build, scan and pin a new image after merge |
+| R17 | Management account placement (M8.5) | AWS work runs in the AWS Organizations management account (`376129869231`), where SCPs do not apply, with the long-lived administrator user of R10 | Open; acknowledged governance risk; prefer a dedicated member account with short-lived role credentials |
 
 ## Deployment gate
 
 **The platform must NOT be treated as ready for public or network-exposed
-production deployment while ID-01 remains unresolved.** Additional
-prerequisites before any such deployment: R8 (green CI on the merged code),
-R2 or an accepted alternative for sensitive output, R7 and R9.
+production deployment.** M8 closed ID-01 in code, but before any such
+deployment: a passing live Cognito verification against an approved
+production identity provider (R1), a supported JWKS network path (R14), a
+rebuilt and pinned M8 image (R16), valid OIDC configuration, R8 (green CI on
+the merged code), R2 or an accepted alternative for sensitive output, R7 and
+R9. (At M7 closure the gate was "while ID-01 remains unresolved".)
 
 **Project completion is distinct from production deployment readiness.**
 The M7 research/portfolio scope - adversarial corpus, authorization fix,

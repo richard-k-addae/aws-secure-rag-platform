@@ -1,145 +1,230 @@
 # AWS Secure RAG Platform
 
-> Production-style, security-first Retrieval-Augmented Generation platform on AWS Bedrock — built with Terraform, ECS Fargate, FastAPI, and a DevSecOps pipeline with AI evaluation gates.
+> Security-first Retrieval-Augmented Generation platform on Amazon Bedrock, built with FastAPI, ECS Fargate, PostgreSQL/pgvector, Terraform, DevSecOps controls, observability, adversarial AI-security testing and verified caller identity.
 
-**Status: M7 AI-security evaluation and hardening scope complete; not production-ready** - ID-01 (caller-controlled identity) is an open deployment prerequisite. The dev AWS runtime is intentionally costed down. See [Roadmap](#roadmap) and the [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md).
+**Project status: engineering and AI-security portfolio scope complete through M8; not production-ready.** M8 replaced caller-supplied identity headers with verified Amazon Cognito access tokens (ID-01): implemented and tested locally, and validated against real PostgreSQL row-level security. It has **not been verified against live Amazon Cognito** and is **not deployed**; the AWS dev runtime is intentionally costed down. See [Deployment readiness](#deployment-readiness).
 
 ## Overview
 
-A secure RAG platform where tenant isolation is enforced during retrieval, AI behavior is regression-tested in CI, failures default to safe behavior, and releases are blocked unless security, quality, and supply-chain gates pass. Built on Amazon Bedrock, FastAPI, pgvector, and Terraform, with governance documentation aligned to the NIST AI RMF and OWASP Top 10 for LLM Applications.
+A multi-tenant RAG service that answers questions only from documents the caller is authorized to read, cites the passages it used, and fails closed when it cannot. It is a platform-engineering and AI-security project, not a chatbot demo:
 
-It is a platform-engineering and AI-security project, not a chatbot demo. All data is synthetic. Compliance mappings are alignment exercises, not certifications.
+- **Verified identity** — every `/v1` request needs a Cognito user pool access token; the service verifies it (RS256 signature, issuer, expiry, `token_use`, app client) and derives tenant and role only from administrator-managed `cognito:groups`. Request headers, query string and body carry no identity authority.
+- **Authorization at retrieval time** — tenant, classification and per-document ACL filters in SQL, enforced again by PostgreSQL row-level security under a role that cannot bypass it.
+- **Untrusted context handled structurally** — retrieved passages and the caller's question are framed with per-request random boundaries the content cannot forge; answers are checked for valid citations and sensitive output before they are returned.
+- **Measured, not assumed** — a deterministic adversarial corpus gates CI, and live Bedrock runs measure model behavior with and without Bedrock Guardrails.
+- **Delivered on AWS** — Terraform-built private networking, ECS Fargate, RDS PostgreSQL/pgvector, KMS, Secrets Manager and CloudWatch/OpenTelemetry observability, deployed live (M5/M6) and later deliberately costed down.
 
-## Verified Milestone 1 Evidence
+All data is synthetic. Governance mappings are alignment exercises, not certifications. Known gaps are documented rather than hidden.
 
-Milestone 1 establishes the verified secure RAG baseline:
+## Evidence levels
 
-- Python 3.11 CI validation
-- Ruff and MyPy enforcement
-- 27 passing application and evaluation tests
-- 6/6 deterministic offline AI evaluation gates
-- IaC, secret-scanning, and Terraform workflow checks
-- working FastAPI health endpoint
+| Claim | Status |
+|---|---|
+| ID-01 verified-identity code (token verification, group mapping, HTTP boundary, no token logging) | **ID-01 enforced and tested locally** |
+| Verified tenant reaching PostgreSQL row-level security | **Verified against real PostgreSQL RLS** (local `pgvector/pgvector:pg16`; CI `integration-tests` job: CI validation pending) |
+| Compatibility with real Cognito tokens and JWKS | **Live Cognito compatibility not verified** — the live validation harness exists but has not been run |
+| JWKS network access from ECS | **Remains a deployment blocker** — private subnets have no path to Cognito's signing keys |
+| Running deployment of the M8 code | **Not deployed** — the dev runtime is costed down, and the **pre-M8 image digests require replacement** |
+| Production readiness | **Not production-ready** — see [Deployment readiness](#deployment-readiness) |
 
-### CI and Security Checks
+## Final validation
+
+- **M1–M7** were merged to `main` through PR #48 (merge commit `722bb73`) after all pull-request checks passed; post-merge CI, Security and Terraform workflows on `main` also passed.
+- **M8** (verified identity): CI validation pending. Local validation before the PR: full suite with PostgreSQL 794 passed; without PostgreSQL 736 passed and 58 skipped (all 58 are the PostgreSQL suite, which runs in its own CI job); adversarial corpus 21/21 enforced; ruff, mypy, Checkov, Trivy, Terraform validate, Gitleaks and TruffleHog clean.
+- **M7.5 / M7.6:** live Bedrock adversarial baseline (54 calls, no Guardrails) and Guardrails comparison — bounded observations, not guarantees.
+
+Project completion does not imply production readiness.
+
+## Verified project evidence
+
+| Area | Evidence |
+|---|---|
+| Verified identity (M8) | [M8 identity evidence](docs/security/M8_IDENTITY_EVIDENCE.md) — what is enforced, what is not verified, deployment prerequisites |
+| AI security (M7) | [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md) — finding register, scorecard, residual risks, deployment gate |
+| Live model evaluation | [M7.5 live adversarial baseline](docs/security/M7_5_LIVE_ADVERSARIAL_BASELINE.md), [M7.6 Guardrails comparison](docs/security/M7_6_GUARDRAILS_COMPARISON.md) |
+| Observability (M6) | [Milestone 6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md), [M6 evidence index](docs/observability/M6_EVIDENCE_INDEX.md) |
+| Supply chain (M4) | [Milestone 4 evidence](docs/security/MILESTONE_4_EVIDENCE.md), [patched ADOT build](docs/security/M6_4_ADOT_PATCHED_BUILD_EVIDENCE.md) |
+| Controls and findings | [Control traceability](docs/security/CONTROL_TRACEABILITY.md), [failure-mode contract](docs/security/FAILURE_MODES.md), [findings](docs/security/FINDINGS.md) |
+| Deployment and cost-down | [Deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md) |
+
+### Early milestone screenshots
+
+Historical: these document the project's initial CI and offline-evaluation foundation (Milestone 1), not its current state.
 
 ![Milestone 1 CI checks](docs/images/milestone-1-ci-checks.png)
 
-### Offline AI Evaluation Gate
-
 ![Offline AI evaluation gate](docs/images/offline-evaluation-gate.png)
 
-The offline evaluation gates verify no-context refusal, prompt-injection confinement, and citation integrity. Model-graded quality scores and latency thresholds remain deferred until live AWS deployment testing.
+## Implemented architecture
 
-## Architecture (target)
+Built with Terraform, deployed live to an AWS dev account (M5/M6), verified, and later destroyed through a reviewed saved-plan procedure. **The runtime is intentionally costed down and not running**; ECR images and Terraform state are preserved, but the preserved image predates M8 and must be rebuilt before any redeployment.
 
 ```
-User
+GitHub Actions (validation only: tests, scanners, policy, Terraform validate)
+
+Operator workstation -- Terraform (reviewed saved plans, S3 remote state)
   |
-Amazon API Gateway  (WAF, rate limiting)
-  |
-Amazon Cognito  (OAuth 2.0 / JWT, RBAC)
-  |
-FastAPI RAG Service on ECS Fargate  (private subnets, no public IPs)
-  |
-  +-- Amazon Bedrock (configurable model ID)  (Guardrails evaluated in M7.6, not adopted)
-  +-- PostgreSQL + pgvector  (vector store, encrypted, private)
-  +-- Amazon S3  (synthetic document store)
-  +-- DynamoDB  (request metadata)
-  +-- SQS  (ingestion jobs, DLQ)
-  +-- KMS + Secrets Manager
-  |
-CloudWatch + CloudTrail  (redacted, structured logs; token/cost metrics)
+AWS dev account
+  +-- VPC: private subnets, no public task IPs, no NAT, encrypted VPC flow logs
+  |     +-- VPC endpoints: Bedrock runtime, ECR, CloudWatch Logs,
+  |                        Secrets Manager, S3 (gateway)
+  +-- ECS Fargate: FastAPI RAG service + ADOT (OpenTelemetry) collector sidecar
+  |     +-- verifies Cognito access tokens in-process (M8; OIDC settings wired,
+  |         empty by default = fail closed; no JWKS network path yet)
+  +-- Amazon Bedrock
+  |     +-- generation: Claude Sonnet 4.6 via US cross-Region inference profile
+  |     +-- embeddings: Amazon Titan Text Embeddings v2
+  +-- RDS PostgreSQL + pgvector (private, encrypted, RLS)
+  +-- ECR (KMS-encrypted, immutable tags, digest-pinned images)
+  +-- KMS customer-managed keys + Secrets Manager
+  +-- CloudWatch: structured logs, EMF metrics, dashboard, alarms
 ```
 
-### Architecture decision: pgvector vs. OpenSearch Serverless
+Locally, the same service runs with Docker Compose (API + PostgreSQL/pgvector), with an optional OpenTelemetry Collector, Prometheus and Grafana stack.
 
-v1 uses PostgreSQL with pgvector as the vector store. It demonstrates the same RAG capabilities (embeddings, similarity search, metadata filtering, private connectivity, encryption, backups) without the always-on OCU cost floor of OpenSearch Serverless. For larger-scale enterprise workloads — high ingest throughput, hybrid lexical+vector search, Bedrock Knowledge Base native integration — OpenSearch Serverless is the recommended alternative and is documented as such in `docs/architecture/`.
+**pgvector vs. OpenSearch Serverless:** pgvector provides embeddings search, metadata filtering, private connectivity, encryption and backups without OpenSearch Serverless's always-on cost floor. OpenSearch Serverless is the better fit for high-ingest, hybrid lexical+vector or Bedrock Knowledge Base workloads ([decision](docs/architecture/VECTOR_STORE_DECISION.md)).
 
-## Security posture (target)
+### Future production architecture
 
-- Least-privilege IAM scoped to specific model invocations
-- Private subnets, VPC endpoints, no public IPs on tasks
-- Application-layer AI controls (implemented, M7): unforgeable prompt boundaries, citation validation, sensitive-output withholding/redaction
-- Bedrock Guardrails: evaluated against a live baseline in M7.6 and deliberately **not adopted** ([ADR 0005](docs/adr/0005-do-not-adopt-bedrock-guardrails.md))
-- Own adversarial test suite (no single control is treated as complete protection)
-- Redacted logging by default: no full prompts/responses outside labeled synthetic-data dev mode
-- Signed container images (Cosign), SBOM (CycloneDX), IaC scanning (Checkov)
-- Governance: `docs/governance/` — threat model, NIST AI RMF and OWASP LLM Top 10 mappings
+Not implemented — production hardening that would be required beyond this project:
+
+- An approved production identity provider (Cognito user pool or equivalent), validated live, and a supported network path from the service to its signing keys (JWKS)
+- Managed ingress such as API Gateway or an ALB with TLS, plus AWS WAF
+- Per-identity rate limiting and quotas
+- Queue-based ingestion (e.g. SQS with a dead-letter queue)
+- Broader sensitive-data controls (the S2 detector gap, request input, `/v1/generate` output)
+- Container image signing and signed provenance; CI deployment through OIDC; operator access through short-lived role credentials in a dedicated account
+
+## Security engineering highlights
+
+- **Identity (M8):** Cognito access-token verification with fixed RS256, trusted issuer-derived JWKS (no redirects, `jku`/`x5u`/`jwk` ignored), bounded key refresh and failure backoff; exactly one `tenant:<id>` and one `role:<role>` group or 403; generic 401/403/503 responses; only bounded reason codes logged, never tokens
+- **Authorization:** tenant, classification and per-document ACL filters in SQL plus PostgreSQL RLS (`NOSUPERUSER NOBYPASSRLS` runtime role asserted, not assumed); document replacement authorized against the *existing* stored classification and ACL, atomically, with serialized concurrent writers (AUTHZ-01)
+- **Prompt boundaries:** per-request CSPRNG boundary tokens, untrusted-context framing, Unicode/control-character sanitization, JSON-encoded source metadata
+- **Output integrity:** citations validated against the passages actually supplied; invalid or uncited answers fail closed; sensitive output withheld or redacted before return
+- **Adversarial testing:** 21-case deterministic corpus in CI, all enforced (OWASP LLM 2025 and MITRE ATLAS tagged); pre-registered live Bedrock evaluations
+- **Guardrails:** Bedrock Guardrails comparatively tested and **not adopted** on the evidence ([ADR 0005](docs/adr/0005-do-not-adopt-bedrock-guardrails.md))
+- **Supply chain and IaC:** Checkov, Conftest/OPA, Trivy, pip-audit with hash-locked dependencies, Gitleaks, TruffleHog, CycloneDX SBOMs, build digests and metadata; dated, reviewed exceptions only
+- **Infrastructure:** private networking with VPC endpoints, KMS customer-managed keys, Secrets Manager, least-privilege task roles, Terraform saved-plan review
+- **Observability:** OpenTelemetry instrumentation with sanitized telemetry, ADOT, CloudWatch metrics, dashboard and alarms, including identity security events
+- **Not delivered:** container image signing and signed provenance remain future work
+
+## What this project demonstrates
+
+- **Cloud engineering:** AWS VPC design with endpoints, ECS Fargate, RDS, IAM, KMS, Secrets Manager, ECR
+- **DevSecOps:** Terraform with remote state, GitHub Actions, policy-as-code, supply-chain and security gates, exception governance
+- **AI engineering:** RAG on Bedrock, embeddings, pgvector similarity search, grounded and cited answering
+- **AI security:** direct and indirect prompt injection, authorization boundaries, verified identity, sensitive-output controls, citation integrity, adversarial evaluation, Guardrail evaluation
+- **Observability:** OpenTelemetry, ADOT, CloudWatch dashboards and alarms, local Prometheus/Grafana
 
 ## Quickstart (local development)
 
+Requires Docker, Python 3.11 with [uv](https://docs.astral.sh/uv/) (for the host-side setup commands), and AWS credentials with access to the configured Bedrock generation and embedding models.
+
 ```bash
-# Requires Docker and AWS credentials with bedrock:InvokeModel
-cp .env.example .env   # set BEDROCK_MODEL_ID and AWS_REGION
-make dev               # api + postgres/pgvector via docker-compose
-make db-init           # create extension, table, HNSW index
+uv sync --extra dev    # local Python environment for setup scripts and checks
+cp .env.example .env   # set BEDROCK_MODEL_ID, EMBEDDING_MODEL_ID and AWS_REGION
+make dev               # api + postgres/pgvector via docker compose
+make db-init           # extension, table, indexes, RLS policy, runtime role
 make ingest            # embed and load the synthetic corpus
 curl localhost:8000/healthz
+```
+
+**Calling the API requires a verified identity; there is no development bypass.** Every `/v1` route needs `Authorization: Bearer <access token>` from an Amazon Cognito user pool you control:
+
+- Set `OIDC_ISSUER` (`https://cognito-idp.<region>.amazonaws.com/<user-pool-id>`) and `OIDC_CLIENT_IDS` (your app client ID) in `.env`, and keep `TENANT_ALLOWLIST` consistent with your groups.
+- In that pool, put each test user in exactly one `tenant:<id>` group (for example `tenant:tenant-a`, matching `TENANT_ALLOWLIST`) and exactly one `role:reader`, `role:ingestor` or `role:admin` group.
+- Use the user's **access token** (ID tokens are rejected). The API container needs outbound HTTPS to Cognito to fetch signing keys.
+
+```bash
 curl -X POST localhost:8000/v1/query \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{"question": "What is the document retention period?"}'
+```
+
+Expected failure responses: with `OIDC_ISSUER` or `OIDC_CLIENT_IDS` unset, protected routes return **503** `Authentication unavailable` (fail closed); without a valid token, **401**; with a valid token whose groups do not map to exactly one allowed tenant and one role, **403**. Never paste real tokens into issues, logs or commits.
+
+Without a Cognito pool, the identity behavior is exercised by the test suite, which signs synthetic tokens with keys generated at test time (`app/tests/identity.py`).
+
+Optional local observability (OpenTelemetry Collector, Prometheus, Grafana):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build
 ```
 
 Run checks:
 
 ```bash
-make lint   # ruff + mypy
-make test   # pytest
+make lint    # ruff + mypy
+make test    # pytest (PostgreSQL row-security tests skip unless TEST_ADMIN_DATABASE_URL and TEST_DATABASE_URL are set)
+make evals   # offline evaluation scorecard
 ```
 
 ## Repository structure
 
 ```
-app/            FastAPI service: api/routes, rag core, clients, auth, core, models, tests
-infrastructure/ Terraform modules (networking, ecs, rds, ...) and dev environment
-evaluations/    Golden dataset, security cases, offline evaluation tests (CI gates)
-policies/       Policy-as-code (OPA/Conftest), IAM least-privilege baselines
-observability/  CloudWatch dashboard and alarm definitions
-docs/           Architecture, governance, runbooks
-scripts/        DB init, corpus ingestion, evaluation runner
-synthetic-data/ Synthetic document corpus (no real data)
+app/              FastAPI service: routes, RAG core, clients, auth (OIDC verification, tenancy), telemetry, tests
+infrastructure/   Terraform modules (networking, security, ecs, rds, ecr, observability), dev environment,
+                  and identity-eval (temporary Cognito evaluation root; not part of the dev stack)
+evaluations/      Golden dataset, adversarial/security cases, offline tests, live M7.5/M7.6/M8.5 harnesses
+policy/           Conftest/OPA Terraform policies and fixtures (CI gate)
+policies/         Additional policy-as-code and IAM baselines
+observability/    Collector, Prometheus, Grafana, dashboard and alarm definitions
+tools/            Patched ADOT collector build
+docs/             Architecture, governance, security evidence, runbooks, ADRs
+scripts/          DB init, ingestion, evaluation runners, live Cognito validation and its Terraform wrapper
+synthetic-data/   Synthetic document corpus (no real data)
 ```
 
 ## Roadmap
 
-| Milestone | Deliverable | Status |
+| Milestone | Goal | Status |
 |---|---|---|
-| 1 | Make it work: restructure, packaging, lint/type/test green, one-command local run, cited RAG flow | Done (this branch) |
-| 2 | Make it secure: tenant-aware retrieval, document classification, authorization + misuse-case tests | Done (identity resolver is a dev header shim until Cognito lands in M4) |
-| 3 | Make AI behavior measurable: golden dataset, offline eval gates blocking CI, workflow scorecard | Done (offline); model-graded gates at M5 |
-| 4 | Make the release trustworthy: Checkov, TruffleHog, Gitleaks, pip-audit, Trivy container gate, Conftest Terraform policies, CycloneDX SBOMs, OCI provenance, evidence bundle | Done (see [Milestone 4 evidence](docs/security/MILESTONE_4_EVIDENCE.md)); Cosign signing at M5 |
-| 5 | Prove AWS delivery: Terraform foundation, ephemeral ECS deploy, smoke tests, teardown, cost report | **Complete (historical):** Terraform remote state, VPC with endpoints and flow logs, KMS-encrypted ECR, a private ECS Fargate service and private RDS PostgreSQL were deployed live to the AWS dev account (October 2026; live verification recorded with the [Milestone 6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md)) and torn down with a reviewed saved-plan destroy on 2026-11-03. **Current state:** the dev runtime is intentionally costed down and **not running** (ECR images and Terraform state preserved; see the [deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md)). Not delivered: a standalone cost report and container image signing. |
-| 6 | Operational depth: SQS ingestion with DLQ, OpenTelemetry, red-team findings, demo recording | Complete (observability scope — OpenTelemetry metrics, CloudWatch dashboard/alarms; see [Milestone 6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md)). Baseline collection continues operationally; current maturity and known limitations are documented there, not claimed as mature or as production SLOs. SQS/DLQ ingestion, red-team findings, and demo recording are tracked separately and not part of this closure. |
-| 7 | AI security: adversarial corpus, authorization fix (AUTHZ-01), prompt-boundary and output/citation hardening, live no-Guardrails baseline, Bedrock Guardrails comparison | **Complete - AI-security evaluation and hardening scope** (see [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md)). Qualifiers: ID-01 remains a deployment prerequisite; the application sensitive-output detector retains a known coverage gap (S2); Guardrails were evaluated but not adopted; M7.5/M7.6 are bounded model evaluations, not universal guarantees. |
+| M1 | Working cited RAG flow, packaging, lint/type/test baseline | Complete |
+| M2 | Tenant-aware retrieval, classification, authorization and misuse-case tests | Complete (identity was a header resolver until M8) |
+| M3 | Measurable AI behavior: golden dataset and offline evaluation gates in CI | Complete (deterministic gates); live Bedrock evaluation added in M7.5/M7.6 |
+| M4 | Trustworthy release: IaC, secret, dependency and container scanning, policy-as-code, SBOMs, build evidence | Complete ([evidence](docs/security/MILESTONE_4_EVIDENCE.md)); container signing and signed provenance not delivered |
+| M5 | AWS delivery: Terraform foundation, live private ECS/RDS deployment, verification, teardown | Complete (historical live deployment); runtime since costed down ([runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md)) |
+| M6 | Observability: OpenTelemetry, ADOT, CloudWatch metrics/dashboard/alarms, local Prometheus/Grafana | Complete (observability scope; [evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md)) |
+| M7 | AI security: adversarial corpus, AUTHZ-01 fix, prompt-boundary and output/citation hardening, live baseline, Guardrails evaluation, evidence closure | Complete (AI-security scope; [evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md)) |
+| M8 | Production identity hardening: verified Cognito access tokens replace caller-supplied identity (ID-01) | Complete in code and real-PostgreSQL integration tests ([evidence](docs/security/M8_IDENTITY_EVIDENCE.md)); **live Cognito verification not executed; not deployed** |
 
-Stretch goals: Automated Reasoning policy validation; Standard-tier contextual grounding once supported by the pinned AWS tooling. (Bedrock Guardrails integration was evaluated in M7.6 and not adopted.)
-Out of scope by decision: Backstage, Kubernetes variant, multi-cloud, SaaS control plane, always-on infrastructure.
+Qualifiers: the S2 sensitive-output detector gap remains open; Guardrails were evaluated but not adopted; live model results are bounded observations, not guarantees; ID-01 is closed in code but its live verification and deployment prerequisites are open. Not delivered from the original plan: SQS/DLQ ingestion, a standalone cost report, demo recording, container image signing. Out of scope by decision: Backstage, Kubernetes variant, multi-cloud, SaaS control plane, always-on infrastructure.
+
+## Deployment readiness
+
+**Project complete ≠ production ready.** The platform is not approved for network-exposed production deployment until these are resolved ([M8 evidence](docs/security/M8_IDENTITY_EVIDENCE.md#deployment-prerequisites-open), [M7 deployment gate](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md#deployment-gate)):
+
+- **Live identity verification:** the M8 verifier has not been run against real Cognito tokens, and no approved production identity provider exists.
+- **JWKS network access remains a deployment blocker:** ECS tasks run in private subnets without NAT and cannot reach Cognito's signing-key endpoint; a deployed service would fail closed (503) on every protected route. A supported network path must be designed and validated.
+- **Pre-M8 image digests require replacement:** the preserved app and bootstrap images predate M8 (they trust caller identity headers) and must not be redeployed.
+- **OIDC configuration:** `oidc_issuer` and `oidc_client_ids` must be set (they default to empty, which fails closed; Terraform only warns).
+- **S2 sensitive-output gap:** the application detector misses one synthetic internal-key family (M7.5 LIVE-S2 reached the caller 3/3); the M7.6 output-regex experiment was promising but inconclusive.
+- **Security exceptions:** temporary, dated Trivy CVE exceptions and deferred Checkov items; next mandatory review **2026-12-04** ([`.trivyignore.yaml`](.trivyignore.yaml), [deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md)).
+- **Operator identity:** Terraform and evaluations still run as a long-lived administrator IAM user in the AWS Organizations management account.
+- **Cleanup:** an unused ALB security group is an open remediation item.
+- **Future architecture:** ingress, rate limiting and the other items under [Future production architecture](#future-production-architecture).
 
 ## Known limitations
 
-- All data is synthetic; compliance mappings are alignment exercises, not certifications.
-- Offline evaluations are deterministic behavioral checks, not independent model-graded scores (those arrive with the ephemeral deployment).
-- Tenant isolation is enforced at the retrieval query (tenant, classification and per-document role ACL) and independently by PostgreSQL row-level security. Caller identity currently comes from validated request headers (**ID-01, open**): the platform must not be exposed on a network or treated as production-ready until verified identity replaces that resolver.
-- The application sensitive-output detector does not recognize one synthetic internal-key family (M7.5 LIVE-S2); `/v1/generate` output and request input are not checked; there is no per-identity rate limiting. See the residual-risk register in the [M7 evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md).
-- Live AI-security results (M7.5, M7.6) are bounded observations of a nondeterministic model (3 repetitions per case), not guarantees.
-- Row-level security is verified only against a real PostgreSQL instance (CI `integration-tests` job, or locally with `TEST_ADMIN_DATABASE_URL` and `TEST_DATABASE_URL` set); those tests skip otherwise. Row security depends on the runtime role being `NOSUPERUSER NOBYPASSRLS` — see FINDINGS.md F-001 for why that is asserted rather than assumed.
+- All data is synthetic; governance mappings are alignment exercises, not certifications.
+- Offline evaluations provide deterministic regression gates. M7.5 and M7.6 add bounded live Bedrock evaluations (3 repetitions per case); those results are empirical observations of nondeterministic model behavior, not universal guarantees.
+- Identity verification is stateless: a revoked token or a removed group remains effective until the access token expires; keep access-token lifetimes short.
+- Verified identity has been validated against real PostgreSQL RLS but not against live Cognito.
+- The sensitive-output detector has a known coverage gap (S2); request input and `/v1/generate` output are not checked; there is no per-identity rate limiting.
+- Row-level security is verified only against a real PostgreSQL instance (CI `integration-tests` job, or locally with `TEST_ADMIN_DATABASE_URL` and `TEST_DATABASE_URL` set); see [FINDINGS.md](docs/security/FINDINGS.md) F-001 for why the runtime role's privileges are asserted rather than assumed.
 - pgvector is chosen for cost and reproducibility, not maximum-scale search.
-- No cloud environment is kept running; AWS deployments are ephemeral by design. The dev runtime is currently costed down (see the [deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md)).
+- No AWS environment is kept running; the dev runtime is currently costed down.
 
-## Governance documentation
+## Governance and evidence
 
 - [Threat model](docs/governance/THREAT_MODEL.md)
 - [NIST AI RMF mapping](docs/governance/NIST_AI_RMF_MAPPING.md)
 - [OWASP LLM Top 10 (2025) mapping](docs/governance/OWASP_LLM_TOP_10_MAPPING.md)
 - [MITRE ATLAS mapping](docs/governance/MITRE_ATLAS_MAPPING.md)
-- [M7 AI-security evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md) (finding register, scorecard, residual risks, deployment gate)
-- [M7.5 live adversarial baseline](docs/security/M7_5_LIVE_ADVERSARIAL_BASELINE.md) and [M7.6 Guardrails comparison](docs/security/M7_6_GUARDRAILS_COMPARISON.md)
+- [M8 identity evidence](docs/security/M8_IDENTITY_EVIDENCE.md)
+- [M7 AI-security evidence index](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md)
 - [AI incident response runbook](docs/runbooks/AI_INCIDENT_RESPONSE_RUNBOOK.md)
-- [Security findings and remediations](docs/security/FINDINGS.md)
-- [Failure-mode contract](docs/security/FAILURE_MODES.md)
-- [Control traceability matrix](docs/security/CONTROL_TRACEABILITY.md)
-- [Milestone 4 security evidence](docs/security/MILESTONE_4_EVIDENCE.md)
 - [Architecture decision records](docs/adr/)
 - [Security policy](SECURITY.md)
 

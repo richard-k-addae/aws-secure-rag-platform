@@ -6,10 +6,19 @@ down, database failure) follow standard ECS/RDS operational procedures.
 > **Applicability (M7.7):** steps that reference Bedrock Guardrails,
 > Cognito, API Gateway, rate limits, SQS or ingestion-time content
 > validation describe the target architecture; none of these is deployed.
-> Guardrails were evaluated and not adopted (ADR 0005); identity is
-> header-based (ID-01, open). Today, detection relies on application
-> signals: `query_answer_withheld` events (bounded `reason`, e.g.
-> `sensitive_output`, `uncited`), RAG/Bedrock metrics and logs.
+> Guardrails were evaluated and not adopted (ADR 0005). Identity is a
+> verified Cognito access token (M8; not yet validated against live Cognito
+> or deployed). Today, detection relies on application signals:
+> `query_answer_withheld` events (bounded `reason`, e.g. `sensitive_output`,
+> `uncited`), identity security events (`missing_token`,
+> `invalid_signature`, `expired_token`, `wrong_client`, `unknown_kid`,
+> `identity_mapping_denied`, `jwks_unavailable`, `auth_not_configured`),
+> RAG/Bedrock metrics and logs. Revoking Cognito tokens does not invalidate
+> an access token already issued: it remains accepted until it expires (R15),
+> so containment for a compromised identity also requires removing its
+> groups or disabling the user and waiting out the access-token lifetime, or
+> removing its app client from `OIDC_CLIENT_IDS` / its tenant from
+> `TENANT_ALLOWLIST`.
 
 ## Severity levels
 

@@ -52,6 +52,26 @@ variable "db_bootstrap_image_digest" {
   default     = "sha256:05c5ef1b3f3350804f57680c996737c896e31fe39394de6008d16dfe5d7d6a44"
 }
 
+# --- Verified identity (M8); validated again by the ECS module -------------------
+
+variable "tenant_allowlist" {
+  description = "Comma-separated tenant IDs accepted from verified tenant:<id> groups"
+  type        = string
+  default     = "tenant-a,tenant-b"
+}
+
+variable "oidc_issuer" {
+  description = "Cognito user pool issuer for the approved production identity provider; empty = protected routes fail closed (503)"
+  type        = string
+  default     = ""
+}
+
+variable "oidc_client_ids" {
+  description = "Comma-separated Cognito app client IDs accepted by the service; empty = protected routes fail closed (503)"
+  type        = string
+  default     = ""
+}
+
 variable "adot_image_digest" {
   description = "Immutable digest of the project-built patched AWS Distro for OpenTelemetry collector image (v0.50.0-patched.1 linux/amd64)"
   type        = string

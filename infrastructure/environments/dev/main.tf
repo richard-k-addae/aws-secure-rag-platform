@@ -71,6 +71,10 @@ module "ecs" {
   db_master_secret_arn      = module.rds.master_user_secret_arn
   db_runtime_secret_arn     = module.rds.runtime_secret_arn
   db_kms_key_arn            = module.rds.kms_key_arn
+
+  tenant_allowlist = var.tenant_allowlist
+  oidc_issuer      = var.oidc_issuer
+  oidc_client_ids  = var.oidc_client_ids
 }
 
 module "rds" {
