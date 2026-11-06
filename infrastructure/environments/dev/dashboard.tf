@@ -232,7 +232,11 @@ resource "aws_cloudwatch_dashboard" "observability" {
           stat   = "Sum"
           period = 300
           metrics = [
-            [local.observability_namespace, "rag.security.events", "event", "missing_tenant"],
+            # M8: missing_token replaces the retired header-era missing_tenant.
+            [local.observability_namespace, "rag.security.events", "event", "missing_token"],
+            [local.observability_namespace, "rag.security.events", "event", "identity_mapping_denied"],
+            [local.observability_namespace, "rag.security.events", "event", "jwks_unavailable"],
+            [local.observability_namespace, "rag.security.events", "event", "auth_not_configured"],
             [local.observability_namespace, "rag.security.events", "event", "unknown_tenant"],
             [local.observability_namespace, "rag.security.events", "event", "unknown_role"],
             [local.observability_namespace, "rag.security.events", "event", "action_denied"],

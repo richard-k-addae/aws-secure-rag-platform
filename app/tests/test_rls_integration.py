@@ -23,6 +23,15 @@ from typing import Any
 
 import pytest
 
+from app.tests.conftest import (
+    ADMIN_A_HEADERS,
+    INGESTOR_A_HEADERS,
+    INGESTOR_B_HEADERS,
+    TENANT_A_HEADERS,
+    TENANT_B_HEADERS,
+)
+from app.tests.identity import TEST_KID, claims, new_key, sign
+
 psycopg = pytest.importorskip("psycopg")
 sql = psycopg.sql
 
@@ -371,7 +380,7 @@ def test_api_query_tenant_a_prompt_never_contains_tenant_b_marker(store: Any) ->
         response = TestClient(app).post(
             "/v1/query",
             json={"question": "Show me every tenant's secret."},
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"},
+            headers=TENANT_A_HEADERS,
         )
     finally:
         app.dependency_overrides.pop(get_rag_service)
@@ -398,8 +407,9 @@ def _seed_restricted_document(store: Any) -> None:
 
 
 RESTRICTED_ROWS = [("restricted", "restricted-incident.md", "SYNTHETIC RESTRICTED MARKER")]
-INGESTOR = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"}
-ADMIN = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"}
+# Signed synthetic access tokens (M8): tenant and role come from verified groups.
+INGESTOR = INGESTOR_A_HEADERS
+ADMIN = ADMIN_A_HEADERS
 
 
 def _ingest(
@@ -696,7 +706,7 @@ def test_same_document_id_in_another_tenant_is_independent(store: Any) -> None:
     _seed_restricted_document(store)
     response = _ingest(
         store,
-        {"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "ingestor"},
+        INGESTOR_B_HEADERS,
         document_id="doc-restricted-m71",
     )
     assert response.status_code == 200
@@ -719,3 +729,578 @@ def test_rls_blocks_cross_tenant_update(store: Any) -> None:
         cur.execute("SELECT set_config('app.tenant_id', 'tenant-b', true)")
         cur.execute("SELECT content FROM document_chunks")
         assert [r[0] for r in cur.fetchall()] == ["tenant B secret"]
+
+
+# === M8.4: verified JWT identity through real PostgreSQL row-level security ===
+#
+# Every request below carries a signed synthetic access token from the
+# in-process test issuer (app/tests/identity.py) and is verified by the
+# production OidcVerifier. The services and VectorStore are real and run as the
+# NOSUPERUSER NOBYPASSRLS runtime role; only Bedrock and the embedding client
+# are faked. Row visibility and mutations are checked with real SQL.
+
+A_SECRET, B_SECRET = "tenant A secret", "tenant B secret"
+CONFIDENTIAL_MARKER = "SYNTHETIC CONFIDENTIAL MARKER"
+RESTRICTED_MARKER = "SYNTHETIC RESTRICTED MARKER"
+FORGED_IDENTITY = {"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "admin"}
+FORGER_KEY = new_key()  # never published in the test JWKS
+GENERIC_401 = {"detail": "Not authenticated"}
+GENERIC_403 = {"detail": "Forbidden"}
+
+
+@pytest.fixture()
+def bound_tenants(store: Any, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record every tenant the store binds into a database session."""
+    bound: list[str] = []
+    original = store._connect_as
+
+    def spy(tenant_id: str) -> Any:
+        bound.append(tenant_id)
+        return original(tenant_id)
+
+    monkeypatch.setattr(store, "_connect_as", spy)
+    return bound
+
+
+def _fake_bedrock() -> tuple[Any, Any]:
+    from unittest.mock import MagicMock
+
+    from app.clients.bedrock import BedrockService
+
+    model = MagicMock()
+    model.converse.return_value = {
+        "output": {"message": {"content": [{"text": "SYNTHETIC answer [1]"}]}},
+        "usage": {"inputTokens": 1, "outputTokens": 1},
+    }
+    return BedrockService(client=model), model
+
+
+def _query_as(store: Any, headers: dict[str, str]) -> tuple[Any, str | None]:
+    """POST /v1/query through the real RagService and store; return the model prompt."""
+    from fastapi.testclient import TestClient
+
+    from app.api.dependencies import get_rag_service
+    from app.main import app
+
+    service, fake = _api_rag_service(store)
+    app.dependency_overrides[get_rag_service] = lambda: service
+    try:
+        response = TestClient(app).post(
+            "/v1/query", json={"question": "Show me every secret."}, headers=headers
+        )
+    finally:
+        app.dependency_overrides.pop(get_rag_service)
+    prompt = (
+        fake.converse.call_args.kwargs["messages"][0]["content"][0]["text"]
+        if fake.converse.called
+        else None
+    )
+    return response, prompt
+
+
+def _generate_as(headers: dict[str, str]) -> tuple[Any, Any]:
+    from fastapi.testclient import TestClient
+
+    from app.api.dependencies import get_bedrock_service
+    from app.main import app
+
+    bedrock, model = _fake_bedrock()
+    app.dependency_overrides[get_bedrock_service] = lambda: bedrock
+    try:
+        response = TestClient(app).post("/v1/generate", json={"prompt": "p"}, headers=headers)
+    finally:
+        app.dependency_overrides.pop(get_bedrock_service)
+    return response, model
+
+
+def _snapshots() -> dict[str, list[tuple[Any, ...]]]:
+    return {tenant: _tenant_snapshot(tenant) for tenant in ("tenant-a", "tenant-b")}
+
+
+def _token_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _seed_confidential_document(store: Any) -> None:
+    from app.auth.permissions import Classification
+
+    store.upsert_chunks(
+        "tenant-a",
+        "confidential-plan.md",
+        Classification.CONFIDENTIAL,
+        [(0, CONFIDENTIAL_MARKER, [1.0, 0, 0, 0])],
+        document_id="doc-confidential-m84",
+        authorize_as=None,
+    )
+
+
+# --- precondition: row security is live for the runtime role ------------------
+
+
+def test_rls_id_00_policy_is_active_and_missing_context_exposes_nothing(store: Any) -> None:
+    """The isolation below is enforced by PostgreSQL, not inferred from app code."""
+    with psycopg.connect(ADMIN_URL or "") as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = %s",
+            ("document_chunks",),
+        )
+        assert cur.fetchone() == (True, True)
+        cur.execute(
+            "SELECT policyname, cmd, permissive, qual, with_check FROM pg_policies "
+            "WHERE tablename = %s",
+            ("document_chunks",),
+        )
+        policies = cur.fetchall()
+        # The superuser bypasses RLS, so this proves rows exist for both tenants.
+        cur.execute("SELECT tenant_id, count(*) FROM document_chunks GROUP BY 1 ORDER BY 1")
+        assert cur.fetchall() == [("tenant-a", 1), ("tenant-b", 1)]
+    assert len(policies) == 1
+    name, cmd, permissive, qual, with_check = policies[0]
+    assert (name, cmd, permissive) == ("tenant_isolation", "ALL", "PERMISSIVE")
+    for expression in (qual, with_check):
+        assert "current_setting('app.tenant_id'" in expression
+
+    with app_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT rolsuper, rolbypassrls, current_setting('row_security') "
+            "FROM pg_roles WHERE rolname = current_user"
+        )
+        assert cur.fetchone() == (False, False, "on")
+        # No tenant context, an empty one and an unknown one all match nothing.
+        cur.execute("SELECT count(*) FROM document_chunks")
+        assert cur.fetchone() == (0,)
+        for unbound in ("", "tenant-z"):
+            cur.execute("SELECT set_config('app.tenant_id', %s, true)", (unbound,))
+            cur.execute("SELECT count(*) FROM document_chunks")
+            assert cur.fetchone() == (0,), unbound
+        conn.rollback()
+        # Without a tenant context nothing can be written for any tenant either.
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            cur.execute(
+                "INSERT INTO document_chunks (tenant_id, document_id, source, chunk_index, "
+                "content, classification, allowed_roles, embedding) "
+                "VALUES ('tenant-a', 'doc-unbound', 'u.md', 0, 'x', 'internal', '{}', "
+                "%s::vector)",
+                (vec([1.0, 0, 0, 0]),),
+            )
+        conn.rollback()
+
+
+# --- RLS-ID-01: a verified tenant-A token reads only tenant-A rows ------------
+
+
+def test_rls_id_01_verified_tokens_read_only_their_own_tenant(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    response, prompt = _query_as(store, TENANT_A_HEADERS)
+    assert response.status_code == 200
+    assert prompt is not None and A_SECRET in prompt and B_SECRET not in prompt
+    assert B_SECRET not in response.text
+    assert [c["source"] for c in response.json()["citations"]] == ["a.md"]
+
+    response, prompt = _query_as(store, TENANT_B_HEADERS)
+    assert response.status_code == 200
+    assert prompt is not None and B_SECRET in prompt and A_SECRET not in prompt
+    assert [c["source"] for c in response.json()["citations"]] == ["b.md"]
+    # The only tenants ever bound into a database session are the verified ones.
+    assert bound_tenants == ["tenant-a", "tenant-b"]
+
+
+# --- RLS-ID-02: forged identity headers change nothing ------------------------
+
+
+def test_rls_id_02a_forged_headers_cannot_redirect_a_verified_query(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    response, prompt = _query_as(store, {**TENANT_A_HEADERS, **FORGED_IDENTITY})
+    assert response.status_code == 200
+    assert prompt is not None and A_SECRET in prompt and B_SECRET not in prompt
+    assert [c["source"] for c in response.json()["citations"]] == ["a.md"]
+    assert bound_tenants == ["tenant-a"]
+
+
+def test_rls_id_02b_forged_headers_cannot_redirect_a_verified_write(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    before_b = _tenant_snapshot("tenant-b")
+    response = _ingest(store, {**INGESTOR_A_HEADERS, **FORGED_IDENTITY}, document_id="doc-m84")
+    assert response.status_code == 200
+    rows = _document_rows("doc-m84", tenant="tenant-a")
+    assert rows and all(row[:2] == ("internal", "employee_security_policy.md") for row in rows)
+    assert _document_rows("doc-m84", tenant="tenant-b") == []
+    assert _tenant_snapshot("tenant-b") == before_b
+    assert bound_tenants == ["tenant-a"]
+
+
+def test_rls_id_02c_tenant_a_cannot_replace_tenant_b_document_by_id(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    """Targeting tenant B's document_id writes a separate tenant-A document only."""
+    before_b = _tenant_snapshot("tenant-b")
+    for headers in (
+        {**INGESTOR_A_HEADERS, **FORGED_IDENTITY},
+        {**ADMIN_A_HEADERS, **FORGED_IDENTITY},
+    ):
+        response = _ingest(store, headers, document_id="doc-b")
+        assert response.status_code == 200
+    assert _tenant_snapshot("tenant-b") == before_b
+    assert _document_rows("doc-b", tenant="tenant-b") == [("internal", "b.md", B_SECRET)]
+    rows_a = _document_rows("doc-b", tenant="tenant-a")
+    assert rows_a and all(row[1] == "employee_security_policy.md" for row in rows_a)
+    assert bound_tenants == ["tenant-a", "tenant-a"]
+
+
+# --- RLS-ID-03: forged headers without a token authenticate nothing -----------
+
+
+def test_rls_id_03_forged_headers_without_token_are_rejected_before_the_database(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    before = _snapshots()
+    for headers in (FORGED_IDENTITY, {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"}):
+        response, prompt = _query_as(store, headers)
+        assert (response.status_code, response.json(), prompt) == (401, GENERIC_401, None)
+        assert response.headers["WWW-Authenticate"] == "Bearer"
+        response = _ingest(store, headers, document_id="doc-b")
+        assert (response.status_code, response.json()) == (401, GENERIC_401)
+        response, model = _generate_as(headers)
+        assert (response.status_code, response.json()) == (401, GENERIC_401)
+        model.converse.assert_not_called()
+    assert _snapshots() == before
+    assert bound_tenants == []
+
+
+# --- RLS-ID-04: reader, ingestor and admin over real rows ---------------------
+
+
+@pytest.mark.parametrize(
+    ("headers", "visible", "hidden"),
+    [
+        (TENANT_A_HEADERS, {A_SECRET}, {CONFIDENTIAL_MARKER, RESTRICTED_MARKER}),
+        (INGESTOR_A_HEADERS, {A_SECRET, CONFIDENTIAL_MARKER}, {RESTRICTED_MARKER}),
+        (ADMIN_A_HEADERS, {A_SECRET, CONFIDENTIAL_MARKER, RESTRICTED_MARKER}, set()),
+    ],
+    ids=["reader", "ingestor", "admin"],
+)
+def test_rls_id_04a_verified_role_bounds_row_visibility(
+    store: Any, headers: dict[str, str], visible: set[str], hidden: set[str]
+) -> None:
+    _seed_confidential_document(store)
+    _seed_restricted_document(store)
+    response, prompt = _query_as(store, headers)
+    assert response.status_code == 200
+    assert prompt is not None
+    for marker in visible:
+        assert marker in prompt, marker
+    for marker in hidden | {B_SECRET}:
+        assert marker not in prompt, marker
+        assert marker not in response.text, marker
+
+
+def test_rls_id_04b_reader_cannot_generate_or_write(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    before = _snapshots()
+    response, model = _generate_as(TENANT_A_HEADERS)
+    assert response.status_code == 403
+    model.converse.assert_not_called()
+    response = _ingest(store, TENANT_A_HEADERS, document_id="doc-a")
+    assert response.status_code == 403
+    assert _snapshots() == before
+    assert bound_tenants == []
+
+
+def test_rls_id_04c_ingestor_and_admin_write_authority_over_real_rows(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    _seed_restricted_document(store)
+    bound_tenants.clear()  # the operator seed above is not a request
+    before = _snapshots()
+    # Ingestor: may not create restricted content (route) ...
+    response = _ingest(
+        store, INGESTOR_A_HEADERS, document_id="doc-new-m84", classification="restricted"
+    )
+    assert response.status_code == 403
+    assert bound_tenants == []
+    # ... nor replace an existing restricted document (in the store transaction).
+    response = _ingest(store, INGESTOR_A_HEADERS, document_id="doc-restricted-m71")
+    assert response.status_code == 403
+    assert bound_tenants == ["tenant-a"]
+    assert _snapshots() == before
+    response, model = _generate_as(INGESTOR_A_HEADERS)
+    assert response.status_code == 403
+    model.converse.assert_not_called()
+
+    # Admin of the same tenant may do both.
+    response = _ingest(
+        store, ADMIN_A_HEADERS, document_id="doc-restricted-m71", classification="restricted"
+    )
+    assert response.status_code == 200
+    rows = _document_rows("doc-restricted-m71")
+    assert rows and all(row[:2] == ("restricted", "employee_security_policy.md") for row in rows)
+    assert not any(RESTRICTED_MARKER in row[2] for row in rows)
+    response, model = _generate_as(ADMIN_A_HEADERS)
+    assert response.status_code == 200
+    model.converse.assert_called_once()
+    assert _tenant_snapshot("tenant-b") == before["tenant-b"]
+
+
+# --- RLS-ID-05: missing, invalid and unmappable tokens never reach the database --
+
+
+def _b64url_json(value: dict[str, Any]) -> str:
+    import base64
+    import json
+
+    return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+
+def _tamper_payload(token: str) -> str:
+    """Splice a tenant-B admin payload under a valid tenant-A reader signature."""
+    header, _, signature = token.split(".")
+    payload = _b64url_json(claims(["tenant:tenant-b", "role:admin"]))
+    return f"{header}.{payload}.{signature}"
+
+
+def _unsigned(body: dict[str, Any]) -> str:
+    """An alg=none token with an empty signature segment."""
+    header = _b64url_json({"alg": "none", "typ": "JWT", "kid": TEST_KID})
+    return f"{header}.{_b64url_json(body)}."
+
+
+def _invalid_token(kind: str) -> str:
+    from collections.abc import Callable
+
+    body = claims(["tenant:tenant-a", "role:admin"])
+    tokens: dict[str, Callable[[], str]] = {
+        "expired": lambda: sign({**body, "iat": body["iat"] - 7200, "exp": body["iat"] - 3600}),
+        "forged_signature": lambda: sign(body, key=FORGER_KEY),
+        "unknown_kid": lambda: sign(body, key=FORGER_KEY, kid="never-published-m84"),
+        "wrong_issuer": lambda: sign({**body, "iss": "https://issuer.invalid"}),
+        "wrong_client": lambda: sign({**body, "client_id": "other-client"}),
+        "id_token": lambda: sign({**body, "token_use": "id"}),
+        "alg_none": lambda: _unsigned(body),
+        "tampered_payload": lambda: _tamper_payload(
+            TENANT_A_HEADERS["Authorization"].removeprefix("Bearer ")
+        ),
+        "malformed": lambda: "not.a.jwt",
+    }
+    return tokens[kind]()
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "expired",
+        "forged_signature",
+        "unknown_kid",
+        "wrong_issuer",
+        "wrong_client",
+        "id_token",
+        "alg_none",
+        "tampered_payload",
+        "malformed",
+    ],
+)
+def test_rls_id_05a_invalid_tokens_are_401_with_no_database_access(
+    store: Any, bound_tenants: list[str], kind: str
+) -> None:
+    before = _snapshots()
+    headers = _token_headers(_invalid_token(kind))
+    response, prompt = _query_as(store, headers)
+    assert (response.status_code, response.json(), prompt) == (401, GENERIC_401, None)
+    response = _ingest(store, headers, document_id="doc-b")
+    assert (response.status_code, response.json()) == (401, GENERIC_401)
+    assert _snapshots() == before
+    assert bound_tenants == []
+
+
+@pytest.mark.parametrize(
+    "groups",
+    [
+        ["tenant:tenant-z", "role:admin"],
+        ["tenant:tenant-a", "tenant:tenant-b", "role:admin"],
+        ["tenant:tenant-a", "role:reader", "role:admin"],
+        ["tenant:tenant-a"],
+        ["role:admin"],
+        ["tenant:tenant-b", "role:superuser"],
+        ["Tenant:tenant-b", "role:admin"],
+        None,
+    ],
+)
+def test_rls_id_05b_unmappable_identities_are_403_with_no_database_access(
+    store: Any, bound_tenants: list[str], groups: list[str] | None
+) -> None:
+    before = _snapshots()
+    headers = _token_headers(sign(claims(groups)))
+    response, prompt = _query_as(store, headers)
+    assert (response.status_code, response.json(), prompt) == (403, GENERIC_403, None)
+    response = _ingest(store, headers, document_id="doc-b")
+    assert (response.status_code, response.json()) == (403, GENERIC_403)
+    assert _snapshots() == before
+    assert bound_tenants == []
+
+
+def test_rls_id_05c_missing_token_is_401_with_no_database_access(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    before = _snapshots()
+    for headers in ({}, {"Authorization": "Bearer "}, {"Authorization": "Basic dXNlcjpwYXNz"}):
+        response, prompt = _query_as(store, headers)
+        assert (response.status_code, response.json(), prompt) == (401, GENERIC_401, None)
+        response = _ingest(store, headers, document_id="doc-b")
+        assert (response.status_code, response.json()) == (401, GENERIC_401)
+    assert _snapshots() == before
+    assert bound_tenants == []
+
+
+# --- RLS-ID-06: session context across consecutive and concurrent requests ----
+
+
+def test_rls_id_06a_interleaved_requests_never_carry_tenant_context_over(
+    store: Any, bound_tenants: list[str]
+) -> None:
+    sequence = ["tenant-a", "tenant-b", "tenant-b", "tenant-a", "tenant-b", "tenant-a"] * 2
+    headers = {"tenant-a": TENANT_A_HEADERS, "tenant-b": TENANT_B_HEADERS}
+    own = {"tenant-a": (A_SECRET, B_SECRET), "tenant-b": (B_SECRET, A_SECRET)}
+    for tenant in sequence:
+        response, prompt = _query_as(store, headers[tenant])
+        assert response.status_code == 200
+        mine, theirs = own[tenant]
+        assert prompt is not None and mine in prompt and theirs not in prompt, tenant
+    assert bound_tenants == sequence
+
+    # Interleaved writes to the SAME document_id stay in their own tenants.
+    writes = [
+        (INGESTOR_A_HEADERS, "employee_security_policy.md"),
+        (INGESTOR_B_HEADERS, "employee_security_policy.md"),
+        (INGESTOR_A_HEADERS, "cloud_operations_guide.md"),
+    ]
+    for write_headers, source in writes:
+        response = _ingest(store, write_headers, document_id="doc-shared-m84", source=source)
+        assert response.status_code == 200
+    rows_a = _document_rows("doc-shared-m84", tenant="tenant-a")
+    rows_b = _document_rows("doc-shared-m84", tenant="tenant-b")
+    assert rows_a and all(row[1] == "cloud_operations_guide.md" for row in rows_a)
+    assert rows_b and all(row[1] == "employee_security_policy.md" for row in rows_b)
+    assert bound_tenants[len(sequence):] == ["tenant-a", "tenant-b", "tenant-a"]
+
+
+def test_rls_id_06b_concurrent_tenant_requests_stay_isolated(store: Any) -> None:
+    """Requests from both tenants are held in flight together, then retrieve."""
+    import re
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import MagicMock
+
+    from fastapi.testclient import TestClient
+
+    from app.api.dependencies import get_rag_service
+    from app.main import app
+    from app.rag.service import RagService
+
+    workers, total = 8, 24
+    barrier = threading.Barrier(workers, timeout=20)
+    prompts: dict[int, str] = {}
+
+    def embed(question: str) -> list[float]:
+        barrier.wait()  # every worker's request is in flight before any retrieves
+        return [1.0, 0, 0, 0]
+
+    def converse(**kwargs: Any) -> dict[str, Any]:
+        text = kwargs["messages"][0]["content"][0]["text"]
+        match = re.search(r"probe (\d+) end", text)
+        assert match is not None
+        prompts[int(match.group(1))] = text
+        return {
+            "output": {"message": {"content": [{"text": "SYNTHETIC answer [1]"}]}},
+            "usage": {"inputTokens": 1, "outputTokens": 1},
+        }
+
+    from app.clients.bedrock import BedrockService
+
+    embeddings = MagicMock()
+    embeddings.embed.side_effect = embed
+    model = MagicMock()
+    model.converse.side_effect = converse
+    service = RagService(bedrock=BedrockService(client=model), embeddings=embeddings, store=store)
+    tenants = ["tenant-a" if i % 2 == 0 else "tenant-b" for i in range(total)]
+    headers = {"tenant-a": TENANT_A_HEADERS, "tenant-b": TENANT_B_HEADERS}
+
+    def call(i: int) -> tuple[int, Any]:
+        response = TestClient(app).post(
+            "/v1/query", json={"question": f"probe {i} end"}, headers=headers[tenants[i]]
+        )
+        return i, response
+
+    app.dependency_overrides[get_rag_service] = lambda: service
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(call, range(total)))
+    finally:
+        app.dependency_overrides.pop(get_rag_service)
+
+    assert len(prompts) == total
+    for i, response in results:
+        assert response.status_code == 200, i
+        mine, theirs = (A_SECRET, B_SECRET) if tenants[i] == "tenant-a" else (B_SECRET, A_SECRET)
+        assert mine in prompts[i] and theirs not in prompts[i], i
+        expected = "a.md" if tenants[i] == "tenant-a" else "b.md"
+        assert [c["source"] for c in response.json()["citations"]] == [expected], i
+
+
+def test_rls_id_06c_tenant_binding_is_transaction_scoped_on_a_reused_connection(
+    store: Any,
+) -> None:
+    """A committed or rolled-back transaction leaves the session with no tenant.
+
+    VectorStore opens a fresh connection per operation today. This proves that
+    even a reused (pooled) connection would fail closed between requests.
+    """
+    conn = store._connect_as("tenant-a")
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT content FROM document_chunks")
+            assert [r[0] for r in cur.fetchall()] == [A_SECRET]
+        conn.commit()
+        with conn.cursor() as cur:
+            cur.execute("SELECT coalesce(current_setting('app.tenant_id', true), '')")
+            assert cur.fetchone() == ("",)
+            cur.execute("SELECT content FROM document_chunks WHERE tenant_id = 'tenant-a'")
+            assert cur.fetchall() == []
+        conn.rollback()
+
+        # Rebinding the same connection to tenant B exposes only tenant B.
+        with conn.cursor() as cur:
+            cur.execute("SELECT set_config('app.tenant_id', 'tenant-b', true)")
+            cur.execute("SELECT content FROM document_chunks")
+            assert [r[0] for r in cur.fetchall()] == [B_SECRET]
+        conn.rollback()  # an aborted request must not leak its binding either
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM document_chunks")
+            assert cur.fetchone() == (0,)
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def test_rls_id_06d_each_store_operation_uses_its_own_closed_connection(
+    store: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No connection, and therefore no session state, outlives a request."""
+    connections: list[Any] = []
+    original = store._connect
+
+    def recording_connect() -> Any:
+        conn = original()
+        connections.append(conn)
+        return conn
+
+    monkeypatch.setattr(store, "_connect", recording_connect)
+    for headers in (TENANT_A_HEADERS, TENANT_B_HEADERS, TENANT_A_HEADERS):
+        response, _ = _query_as(store, headers)
+        assert response.status_code == 200
+    assert _ingest(store, INGESTOR_B_HEADERS, document_id="doc-conn-m84").status_code == 200
+    assert len(connections) == 4
+    assert len({id(c) for c in connections}) == 4
+    assert all(c.closed for c in connections)

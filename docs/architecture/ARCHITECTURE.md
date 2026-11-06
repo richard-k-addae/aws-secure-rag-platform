@@ -2,9 +2,13 @@
 
 ## Request flow (target, Phase 4)
 
-> **Implementation status (M7.7):** Cognito, API Gateway/WAF, DynamoDB
-> request records and Bedrock Guardrails are **not** implemented. Caller
-> identity currently comes from validated request headers (ID-01, open);
+> **Implementation status (M8, 2026-11-05):** the service verifies Cognito
+> user pool **access tokens** itself (RS256, issuer, expiry, `token_use`,
+> `client_id`) and derives tenant and role only from `cognito:groups`
+> ([M8 evidence](../security/M8_IDENTITY_EVIDENCE.md)); this is tested locally
+> and against real PostgreSQL, **not yet against live Cognito**, and no
+> production user pool exists. API Gateway/WAF (and its JWT authorizer),
+> DynamoDB request records and Bedrock Guardrails are **not** implemented;
 > Guardrails were evaluated and not adopted (ADR 0005). Implemented AI
 > controls are application-layer: prompt boundaries, citation validation and
 > sensitive-output withholding. See the
@@ -12,7 +16,7 @@
 
 1. Client authenticates against Cognito, receives JWT.
 2. Request hits API Gateway: WAF rules, throttling, JWT authorizer.
-3. FastAPI service on ECS Fargate (private subnet, no public IP) validates the request and the caller's role.
+3. FastAPI service on ECS Fargate (private subnet, no public IP) verifies the access token and derives tenant and role from its groups (implemented in M8; the deployed network has no JWKS path yet, R14).
 4. Retrieval: query embedded, pgvector searched with metadata filters INCLUDING document-level authorization for the caller's role.
 5. Retrieved chunks + user query -> Bedrock (via VPC endpoint), framed with per-request unforgeable boundaries; answer checked for valid citations and sensitive output before return.
 6. Response returned with source citations; metadata (tokens, latency, model ID, withheld-answer reasons) logged redacted; request record written to DynamoDB.

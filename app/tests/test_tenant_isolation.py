@@ -17,7 +17,15 @@ from app.auth.permissions import Classification, Role, allowed_classifications
 from app.auth.tenancy import TenantContext
 from app.main import app
 from app.rag.service import RagService
-from app.tests.conftest import ADMIN_A_HEADERS, TENANT_A_HEADERS, TENANT_B_HEADERS, make_bedrock
+from app.tests.conftest import (
+    ADMIN_A_HEADERS,
+    INGESTOR_A_HEADERS,
+    INGESTOR_B_HEADERS,
+    TENANT_A_HEADERS,
+    TENANT_B_HEADERS,
+    make_bedrock,
+)
+from app.tests.identity import bearer
 from app.tests.prompt_frame import parse_framed_prompt
 
 client = TestClient(app)
@@ -48,20 +56,23 @@ def post_query(
 # --- identity resolution ---------------------------------------------------
 
 
-def test_missing_tenant_header_is_unauthorized() -> None:
+def test_missing_bearer_token_is_unauthorized() -> None:
     response, _ = post_query({})
     assert response.status_code == 401
+    assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
 def test_unknown_tenant_is_forbidden() -> None:
-    response, _ = post_query({"X-Tenant-Id": "tenant-evil", "X-Tenant-Role": "reader"})
+    # A verified identity whose tenant group is not on the server allowlist.
+    response, _ = post_query(bearer("tenant-evil", "reader"))
     assert response.status_code == 403
-    assert response.json()["detail"] == "Unknown tenant"
+    assert response.json()["detail"] == "Forbidden"
 
 
 def test_unknown_role_is_forbidden() -> None:
-    response, _ = post_query({"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "superuser"})
+    response, _ = post_query(bearer("tenant-a", "superuser"))
     assert response.status_code == 403
+    assert response.json()["detail"] == "Forbidden"
 
 
 # --- misuse: caller attempts to assert its own identity --------------------
@@ -115,7 +126,7 @@ def test_ingest_above_role_classification_is_forbidden() -> None:
     response = client.post(
         "/v1/documents/ingest",
         json={"source": "employee_security_policy.md", "classification": "restricted"},
-        headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"},
+        headers=INGESTOR_A_HEADERS,
     )
     assert response.status_code == 403
     assert "may not ingest" in response.json()["detail"]
@@ -140,7 +151,7 @@ def test_ingest_writes_into_callers_tenant() -> None:
         response = client.post(
             "/v1/documents/ingest",
             json={"source": "employee_security_policy.md", "classification": "internal"},
-            headers={"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "ingestor"},
+            headers=INGESTOR_B_HEADERS,
         )
     finally:
         app.dependency_overrides.pop(get_ingestion_service)
@@ -198,7 +209,7 @@ def test_ingest_passes_document_acl_to_store() -> None:
                 "document_id": "doc-42",
                 "allowed_roles": ["admin"],
             },
-            headers={"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"},
+            headers=INGESTOR_A_HEADERS,
         )
     finally:
         app.dependency_overrides.pop(get_ingestion_service)
@@ -270,7 +281,7 @@ def test_ingest_route_always_authorizes_as_the_resolved_caller() -> None:
         response = client.post(
             "/v1/documents/ingest",
             json={"source": "employee_security_policy.md", "classification": "internal"},
-            headers={"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "ingestor"},
+            headers=INGESTOR_B_HEADERS,
         )
     finally:
         app.dependency_overrides.pop(get_ingestion_service)

@@ -53,6 +53,7 @@ from app.rag.ingestion import IngestionService
 from app.rag.prompting import SYSTEM_PROMPT, build_user_prompt
 from app.rag.retrieval import RetrievedChunk, VectorStore
 from app.rag.service import NO_CONTEXT_ANSWER, RagService
+from app.tests.identity import bearer
 from app.tests.prompt_frame import Passage, parse_framed_prompt
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -135,9 +136,14 @@ REVIEWED_CONVERSE_FIELDS = frozenset(
     {"modelId", "messages", "inferenceConfig", "system", "guardrailConfig"}
 )
 
-READER_A = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "reader"}
-INGESTOR_A = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "ingestor"}
-SELF_ASSERTED_ADMIN_A = {"X-Tenant-Id": "tenant-a", "X-Tenant-Role": "admin"}
+# Signed synthetic access tokens from the deterministic test issuer (M8):
+# tenant and role come only from verified cognito:groups.
+READER_A = bearer("tenant-a", "reader")
+INGESTOR_A = bearer("tenant-a", "ingestor")
+VERIFIED_ADMIN_A = bearer("tenant-a", "admin")
+# The pre-M8 identity interface: caller-supplied headers that must carry no
+# authority at all (ID-01).
+FORGED_IDENTITY_HEADERS = {"X-Tenant-Id": "tenant-b", "X-Tenant-Role": "admin"}
 
 _SYSTEM_PROMPT_AT_IMPORT = str(SYSTEM_PROMPT)
 
@@ -603,7 +609,7 @@ def run_output_secret_leak(case: dict[str, Any]) -> None:
 def run_no_tools(case: dict[str, Any]) -> None:
     capture = run_answered_query("What is the retention period?", [benign_chunk()])
     assert_no_tools(capture.request)
-    generate, fake = run_generate(SELF_ASSERTED_ADMIN_A)
+    generate, fake = run_generate(VERIFIED_ADMIN_A)
     require(generate.status_code == 200, "admin /v1/generate did not return 200")
     assert_no_tools(dict(fake.converse.call_args.kwargs))
 
@@ -643,15 +649,16 @@ def run_document_id_overwrite(case: dict[str, Any]) -> None:
 
 
 def run_header_role_assertion(case: dict[str, Any]) -> None:
-    response, fake = run_generate(SELF_ASSERTED_ADMIN_A)
-    assert response.status_code in {401, 403}
+    """ID-01: caller headers carry no tenant or role authority."""
+    # A verified reader cannot become admin (or another tenant) via headers.
+    response, fake = run_generate({**READER_A, **FORGED_IDENTITY_HEADERS})
+    assert response.status_code == 403
     fake.converse.assert_not_called()
-
-
-def run_header_role_assertion_current(case: dict[str, Any]) -> None:
-    response, fake = run_generate(SELF_ASSERTED_ADMIN_A)
-    assert response.status_code == 200
-    fake.converse.assert_called_once()
+    # The same headers without a verified token authenticate nothing.
+    response, fake = run_generate(dict(FORGED_IDENTITY_HEADERS))
+    assert response.status_code == 401
+    assert response.headers.get("WWW-Authenticate") == "Bearer"
+    fake.converse.assert_not_called()
 
 
 RUNNERS: dict[str, Callable[[dict[str, Any]], None]] = {
@@ -670,7 +677,6 @@ RUNNERS: dict[str, Callable[[dict[str, Any]], None]] = {
     "no_tools": run_no_tools,
     "document_id_overwrite": run_document_id_overwrite,
     "header_role_assertion": run_header_role_assertion,
-    "header_role_assertion_current": run_header_role_assertion_current,
 }
 
 

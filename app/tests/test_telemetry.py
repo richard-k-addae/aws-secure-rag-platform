@@ -42,7 +42,11 @@ QUERYSTRING_MARK = "LEAKMARK_QUERYSTRING_9087"
 AWS_MESSAGE_MARK = "LEAKMARK_AWS_MESSAGE_3310"
 SQL_MARK = "LEAKMARK_SQL_ROW_5526"
 DATABASE_URL_MARK = "postgresql://rag_app:LEAKMARK_DB_PASSWORD_6604@db.internal:5432/rag"
-TENANT_ID = TENANT_A_HEADERS["X-Tenant-Id"]
+# The tenant carried by the verified test token behind TENANT_A_HEADERS.
+TENANT_ID = "tenant-a"
+# LOG-01: the raw bearer token (and its signature segment) must never be exported.
+BEARER_TOKEN = TENANT_A_HEADERS["Authorization"].removeprefix("Bearer ")
+TOKEN_SIGNATURE = BEARER_TOKEN.rsplit(".", 1)[1]
 
 # The message Bedrock returned in the live M5 smoke run that failed and cleaned up.
 LIVE_BEDROCK_MESSAGE = (
@@ -275,9 +279,14 @@ def test_successful_query_exports_no_content_or_identifiers(harness: Harness) ->
     # Control: the instrumentation really did capture the query string.
     assert QUERYSTRING_MARK in raw
 
-    for marker in (QUESTION_MARK, ANSWER_MARK, QUERYSTRING_MARK, TENANT_ID, "leak-test"):
+    for marker in (
+        QUESTION_MARK, ANSWER_MARK, QUERYSTRING_MARK, TENANT_ID, "leak-test",
+        BEARER_TOKEN, TOKEN_SIGNATURE, "Bearer",
+    ):
         assert marker not in exported
-    for marker in (QUESTION_MARK, ANSWER_MARK, QUERYSTRING_MARK, TENANT_ID):
+    for marker in (
+        QUESTION_MARK, ANSWER_MARK, QUERYSTRING_MARK, TENANT_ID, BEARER_TOKEN, TOKEN_SIGNATURE,
+    ):
         assert marker not in repr(harness.metric_points())
 
 

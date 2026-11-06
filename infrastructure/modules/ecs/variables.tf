@@ -175,3 +175,45 @@ variable "db_kms_key_arn" {
   description = "ARN of the KMS key that encrypts both database secrets"
   type        = string
 }
+
+# --- Verified identity (M8) -----------------------------------------------------
+# Plain configuration, not secrets: an issuer URL and public app client IDs.
+# Empty OIDC values leave authentication unconfigured, which the application
+# treats as fail-closed (protected routes answer 503); there is no bypass.
+
+variable "tenant_allowlist" {
+  description = "Comma-separated tenant IDs the service accepts from verified tenant:<id> groups"
+  type        = string
+  default     = "tenant-a,tenant-b"
+
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*(,[a-z0-9][a-z0-9-]*)*$", var.tenant_allowlist))
+    error_message = "tenant_allowlist must be a non-empty comma-separated list of lowercase tenant IDs with no spaces."
+  }
+}
+
+variable "oidc_issuer" {
+  description = "Cognito user pool issuer (https://cognito-idp.<region>.amazonaws.com/<pool-id>); empty = authentication unconfigured (fail closed)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition = var.oidc_issuer == "" || try(
+      regex("^https://cognito-idp\\.([a-z0-9-]+)\\.amazonaws\\.com/([a-z0-9-]+)_[A-Za-z0-9]+$", var.oidc_issuer)[0]
+      == regex("^https://cognito-idp\\.([a-z0-9-]+)\\.amazonaws\\.com/([a-z0-9-]+)_[A-Za-z0-9]+$", var.oidc_issuer)[1],
+      false
+    )
+    error_message = "oidc_issuer must be empty or https://cognito-idp.<region>.amazonaws.com/<region>_<id> with matching regions, no path, query or trailing slash."
+  }
+}
+
+variable "oidc_client_ids" {
+  description = "Comma-separated Cognito app client IDs whose access tokens are accepted; empty = authentication unconfigured (fail closed)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.oidc_client_ids == "" || can(regex("^[A-Za-z0-9]{1,128}(,[A-Za-z0-9]{1,128})*$", var.oidc_client_ids))
+    error_message = "oidc_client_ids must be empty or a comma-separated list of alphanumeric app client IDs with no spaces."
+  }
+}

@@ -301,7 +301,26 @@ SECURITY_EVENTS = _Counter("rag.security.events")
 
 SECURITY_EVENT_NAMES = frozenset(
     {
-        "missing_tenant",
+        # M8 verified identity. unknown_tenant / unknown_role keep their M6
+        # meaning (a tenant or role the server does not accept), now derived
+        # from verified groups instead of headers. missing_tenant was retired
+        # with the header resolver; missing_token replaces it.
+        "missing_token",
+        "malformed_token",
+        "invalid_algorithm",
+        "invalid_signature",
+        "expired_token",
+        "token_not_yet_valid",
+        "wrong_issuer",
+        "wrong_audience",
+        "wrong_client",
+        "wrong_token_use",
+        "missing_claim",
+        "unknown_kid",
+        "invalid_token",
+        "jwks_unavailable",
+        "auth_not_configured",
+        "identity_mapping_denied",
         "unknown_tenant",
         "unknown_role",
         "action_denied",

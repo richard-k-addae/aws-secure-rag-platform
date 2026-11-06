@@ -3,6 +3,21 @@
 Maps each Milestone 6 control/claim to its source, validating artifact, and current verification status.
 Use this index to locate the authoritative evidence for any M6 claim without re-deriving it.
 
+> **M8 reconciliation note (2026-11-05).** This index is the M6 historical
+> record and is kept unchanged. M8 retired the header-era `missing_tenant`
+> event; `missing_token` replaces it, and `unknown_tenant` / `unknown_role` now
+> come from verified Cognito groups. M8 added identity events
+> (`malformed_token`, `invalid_algorithm`, `invalid_signature`,
+> `expired_token`, `token_not_yet_valid`, `wrong_issuer`, `wrong_audience`,
+> `wrong_client`, `wrong_token_use`, `missing_claim`, `unknown_kid`,
+> `invalid_token`, `jwks_unavailable`, `auth_not_configured`,
+> `identity_mapping_denied`), for 24 registered events. The dev dashboard
+> query was corrected to `missing_token` and now also charts
+> `identity_mapping_denied`, `jwks_unavailable` and `auth_not_configured`;
+> `app/tests/test_m8_operational_config.py` keeps dashboard and alarm event
+> names in the registered set. See
+> [M8 identity evidence](../security/M8_IDENTITY_EVIDENCE.md).
+
 | # | Control / Claim | Source (code/config) | Verification artifact | Milestone | Status |
 |---|---|---|---|---|---|
 | 1 | OTel SDK off by default, fail-closed on content | [`app/core/telemetry.py`](../../app/core/telemetry.py) | Source inspection (this doc, M6.6) | M6.1 | Verified (source) |

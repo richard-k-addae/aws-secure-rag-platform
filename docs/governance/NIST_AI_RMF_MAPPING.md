@@ -19,9 +19,9 @@ Integration** (third-party model and images).
 | Theme | Evidence |
 |---|---|
 | Risk documentation | [Threat model](THREAT_MODEL.md) (reconciled at M7.7); [M7 evidence index and finding register](../security/M7_AI_SECURITY_EVIDENCE_INDEX.md) |
-| Known limitations stated openly | README "Known limitations"; residual-risk register in the evidence index (ID-01, S2 detector gap, `LOG_FULL_CONTENT`, `/v1/generate` output, rate limiting) |
+| Known limitations stated openly | README "Known limitations"; residual-risk register in the evidence index (ID-01 live verification and deployment prerequisites R14-R16, S2 detector gap, `LOG_FULL_CONTENT`, `/v1/generate` output, rate limiting) |
 | Evidence-based technology decisions | [ADR 0005](../adr/0005-do-not-adopt-bedrock-guardrails.md): Bedrock Guardrails evaluated (M7.6) and not adopted |
-| Accountability for open findings | ID-01 recorded as an OPEN finding and a deployment gate; S2 detector gap recorded as OPEN, not hidden by Guardrail results |
+| Accountability for open findings | ID-01 recorded as an OPEN finding at M7, closed in code by M8 with its evidence level stated explicitly (enforced locally and against real PostgreSQL; real Cognito verification not executed; [M8 evidence](../security/M8_IDENTITY_EVIDENCE.md)); S2 detector gap recorded as OPEN, not hidden by Guardrail results |
 | Pre-registration and integrity of evaluations | M7.5/M7.6 cases, rules and configurations frozen before live calls, with SHA-256 pins; results not rerun or tuned after viewing |
 
 ## MAP
@@ -31,14 +31,15 @@ Integration** (third-party model and images).
 | Context and trust boundaries | RAG boundaries in the threat model: caller -> API, system prompt vs caller question vs retrieved passages, service -> PostgreSQL (tenant boundary), service -> Bedrock |
 | Tenant boundary | Tenant, classification and per-document ACL filters in SQL; PostgreSQL RLS; runtime role without RLS bypass (`app/tests/test_rls_integration.py`) |
 | System / user / retrieved-content separation | M7.2 per-request unforgeable boundary framing (`app/rag/prompting.py`, `app/tests/test_prompting.py`) |
-| Risk identification | M7.1 adversarial corpus: 22 cases tagged with OWASP LLM 2025 and MITRE ATLAS IDs ([ATLAS mapping](MITRE_ATLAS_MAPPING.md), [OWASP mapping](OWASP_LLM_TOP_10_MAPPING.md)) |
+| Risk identification | M7.1 adversarial corpus (22 cases at M7; 21 after M8 retired ID-01C) tagged with OWASP LLM 2025 and MITRE ATLAS IDs ([ATLAS mapping](MITRE_ATLAS_MAPPING.md), [OWASP mapping](OWASP_LLM_TOP_10_MAPPING.md)) |
 | Impact characterization | Synthetic data only; production impact assumptions stated in the threat model |
 
 ## MEASURE
 
 | Theme | Evidence |
 |---|---|
-| Deterministic adversarial suite (M7.1) | 22 cases: 20 enforced, 1 characterization (ID-01C), 1 strict xfail (ID-01); run in CI (`evaluations/tests/test_adversarial_offline.py`) |
+| Deterministic adversarial suite (M7.1, updated M8) | 21 cases, all enforced (M8 promoted ID-01 and retired ID-01C; at M7 closure: 22 cases, 20 enforced, 1 characterization, 1 strict xfail); run in CI (`evaluations/tests/test_adversarial_offline.py`) |
+| Verified identity (M8) | Token verification, fail-closed group mapping and HTTP-boundary tests; verified tenant through real PostgreSQL RLS (`app/tests/test_rls_integration.py`); live Cognito validation harness built but **not executed** |
 | Live no-Guardrails baseline (M7.5) | 54/54 calls: 33 `model_resisted`, 15 `model_correct`, 3 `application_blocked`, 3 `model_failed`, 0 runtime errors ([M7.5](../security/M7_5_LIVE_ADVERSARIAL_BASELINE.md)) |
 | Guardrails comparison (M7.6) | M7.6a 54/54 (0 unsafe final outcomes; 47 interventions; unacceptable false refusals/positives); M7.6b-A S2 exposure 0/3, verdict INCONCLUSIVE; M7.6b-B MEDIUM identical to HIGH ([M7.6](../security/M7_6_GUARDRAILS_COMPARISON.md)) |
 | False-refusal / usability measurement | M7.6a: 5/6 answerable/conflict runs refused; harmless G4 blocked 3/3 at HIGH and MEDIUM |
@@ -53,6 +54,6 @@ Integration** (third-party model and images).
 | Remediated findings | AUTHZ-01 (unauthorized document replacement) fixed with real-PostgreSQL, race and ACL regressions; IPI structural findings fixed (M7.2); citation integrity enforced (M7.3) |
 | Output controls | Citation validation, fail-closed unsupported answers, withhold/redact sensitive output on `/v1/query` (`app/rag/output_integrity.py`) |
 | Technology non-adoption decision | Guardrails not adopted ([ADR 0005](../adr/0005-do-not-adopt-bedrock-guardrails.md)); application controls remain primary |
-| Residual-risk register and deployment gate | Evidence index: no public/network-exposed production deployment while ID-01 is open |
+| Residual-risk register and deployment gate | Evidence index: no public/network-exposed production deployment until live identity verification, a JWKS network path, a rebuilt M8 image and the remaining gate items are complete (R1, R14, R16, R8, R2, R7, R9) |
 | Incident response | [AI incident response runbook](../runbooks/AI_INCIDENT_RESPONSE_RUNBOOK.md) |
 | Cost and exposure management | Dev runtime intentionally costed down; see [deployment runbook](../runbooks/DEPLOYMENT_RUNBOOK.md) |

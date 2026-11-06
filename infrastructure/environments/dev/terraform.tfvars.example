@@ -1,3 +1,9 @@
 aws_region  = "us-east-1"
 environment = "dev"
 vpc_cidr    = "10.20.0.0/16"
+
+# Verified identity (M8). Placeholders only; never point at the temporary
+# identity-eval pool. Left empty, protected routes fail closed with 503.
+# tenant_allowlist = "tenant-a,tenant-b"
+# oidc_issuer      = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_EXAMPLE"
+# oidc_client_ids  = "exampleappclientid"

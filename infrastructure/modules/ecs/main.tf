@@ -109,6 +109,10 @@ resource "aws_ecs_task_definition" "app" {
             { name = "BEDROCK_MODEL_ID", value = var.bedrock_inference_profile_id },
             { name = "EMBEDDING_MODEL_ID", value = var.bedrock_embedding_model_id },
             { name = "LOG_FULL_CONTENT", value = "false" },
+            # M8 verified identity. Empty OIDC values fail closed (503).
+            { name = "TENANT_ALLOWLIST", value = var.tenant_allowlist },
+            { name = "OIDC_ISSUER", value = var.oidc_issuer },
+            { name = "OIDC_CLIENT_IDS", value = var.oidc_client_ids },
           ],
           var.enable_adot_sidecar ? [
             { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4318" },
