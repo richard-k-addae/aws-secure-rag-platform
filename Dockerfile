@@ -15,6 +15,9 @@ FROM python:3.11-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cf
 # CVE-2026-85091 (DSA-6613-1): the pinned official image predates the Debian
 # security fix. Upgrade only zlib1g, to the exact fixed version, from the official
 # trixie-security repository. Remove once the base digest ships this version.
+# Re-checked 2026-11-10: the latest python:3.11-slim-trixie digest
+# (sha256:07d4824036af..., built 2026-11-05) still ships the vulnerable
+# 1:1.3.dfsg+really1.3.1-1+b1, so this upgrade remains required.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --only-upgrade \
        zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \

@@ -150,9 +150,9 @@ The vector store is pgvector rather than OpenSearch Serverless. pgvector gives f
   - Digest-pinned official base image.
   - The Trivy HIGH/CRITICAL gate includes unfixed findings. Result: **0 unexcepted HIGH/CRITICAL** findings.
 - **Exceptions:**
-  - Every exception is an exact CVE ID with a reachability statement and an expiry date ([`.trivyignore.yaml`](.trivyignore.yaml): 11 entries, all expiring 2026-12-04).
+  - Every exception is an exact CVE ID with a reachability statement and an expiry date ([`.trivyignore.yaml`](.trivyignore.yaml): 11 entries, reviewed 2026-11-10 and renewed to 2027-02-04).
   - When Debian ships a fix, it is installed rather than suppressed. CVE-2026-85091 and CVE-2026-76844 are fixed by pinning the Debian security build of `zlib1g`, and the stale CVE-2026-76844 exception was removed.
-  - CVE-2026-119374 and CVE-2026-119379 (SQLite) are excepted: no fixed Debian 13 package exists, and reachability is assessed as low, not impossible.
+  - CVE-2026-119373, CVE-2026-119374 and CVE-2026-119379 (SQLite) are excepted: no fixed Debian 13 package exists, and reachability is assessed as low, not impossible.
 - **Provenance evidence:** CycloneDX SBOMs, build digests and metadata as CI artifacts.
 - **Not delivered:** container image signing and signed provenance.
 
@@ -275,7 +275,7 @@ synthetic-data/   Synthetic document corpus (no real data)
   - M8.5 itself used MFA-protected temporary roles, now destroyed.
 - **Supply chain:**
   - No image signing or signed provenance.
-  - The 11 scanner exceptions must be reviewed by 2026-12-04.
+  - The 11 scanner exceptions must be reviewed again by 2027-02-04.
   - The runtime image installs the exact Debian security build of `zlib1g` until the official base image includes it.
 - **Stateless tokens:** revocation and group removal take effect only at access-token expiry; keep lifetimes short.
 - **Cleanup:** an unused ALB security group is an open remediation item.
