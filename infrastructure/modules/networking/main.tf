@@ -27,7 +27,10 @@ resource "aws_default_security_group" "default" {
 }
 
 data "aws_availability_zones" "available" {
-  state = "available"
+  filter {
+    name   = "zone-id"
+    values = var.availability_zone_ids
+  }
 }
 
 resource "aws_internet_gateway" "this" {
