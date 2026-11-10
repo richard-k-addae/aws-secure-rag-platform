@@ -38,5 +38,12 @@ jobs:
           terraform init -backend=false
           terraform validate
 
+      # M8.5 temporary IAM bootstrap root: validation only (no credentials, no plan/apply).
+      - name: Validate Terraform (identity-eval-bootstrap)
+        working-directory: infrastructure/environments/identity-eval-bootstrap
+        run: |
+          terraform init -backend=false
+          terraform validate
+
       # Milestone 4: add fixture-based Conftest/Rego tests.
       # Milestone 5: run Conftest against a live Terraform plan.

@@ -96,32 +96,48 @@ SHA-256: record it, review the plan, then pass it to `apply`.
 Exit codes: 0 success, 1 Terraform failed, 4 refused (not run), 5 new plan failed
 verification.
 
-### Obtaining credentials (IAM Identity Center)
+### Obtaining credentials (MFA-protected role sessions)
+
+The roles `rag-eval-terraform` and `rag-eval-harness` are created by the separate,
+temporary root `../identity-eval-bootstrap/` (see its README). Both trust exactly one
+authorized IAM operator principal, and only for an MFA-authenticated
+`sts:AssumeRole`:
+
+```text
+authorized IAM operator
+    ↓ MFA-protected sts:AssumeRole
+rag-eval-terraform  /  rag-eval-harness
+    ↓
+temporary STS credentials (one hour), exported to the one tool process
+```
 
 The wrapper only accepts exported credentials; a signed-in AWS CLI profile alone is
-not enough. With the planned design (an IAM role `rag-eval-terraform` that trusts
-the Identity Center administrator role), define a CLI profile that chains from your
-SSO profile (`role_arn` plus `source_profile`), then in the shell that will run the
-wrapper:
+not enough. Define one local CLI profile per role (outside the repository) with
+`role_arn`, `source_profile` (the operator profile), `mfa_serial` and
+`duration_seconds = 3600`, then in the shell that will run the wrapper:
 
 ```powershell
-aws sso login --profile <sso-profile>
-aws configure export-credentials --profile rag-eval-terraform --format powershell | Invoke-Expression
+aws configure export-credentials --profile rag-eval-terraform --format powershell | Invoke-Expression   # prompts for the MFA code
 aws sts get-caller-identity   # must show assumed-role/rag-eval-terraform/...
 ```
 
+Use a separate shell and the `rag-eval-harness` profile for the harness.
+
 `export-credentials` sets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
 `AWS_SESSION_TOKEN` and `AWS_CREDENTIAL_EXPIRATION` (ISO 8601 with a timezone). It
-prints secrets, so never redirect it to a file or log. A chained role session lasts
-at most one hour, so export fresh credentials for each wrapper call (the plan's
-SHA-256 pin carries across sessions). This procedure has not been exercised yet
-because no role exists. Requirements that follow from the design:
+prints secrets, so never redirect it to a file or log. A role session lasts at most
+one hour, so export fresh credentials for each wrapper call (the plan's SHA-256 pin
+carries across sessions). This procedure was exercised successfully during M8.5
+live validation. The temporary roles were destroyed after the evaluation completed.
+Requirements enforced by the evaluated design:
 
-- the Terraform role must be named exactly `rag-eval-terraform`; an Identity Center
-  permission set used directly would have an `AWSReservedSSO_...` role name and is
-  refused;
-- the session name (an e-mail address for Identity Center sessions) is accepted but
-  never echoed or recorded.
+- the roles must be named exactly `rag-eval-terraform` and `rag-eval-harness`; a role
+  of any other name (for example an `AWSReservedSSO_...` permission-set role) is
+  refused by the wrapper, and by the harness unless `--expected-role-name` is set;
+- the session name is accepted but never echoed or recorded;
+- the operator identity itself is still a long-lived credential (R10/R17); it is
+  used only to assume a role with MFA, and to apply and destroy the bootstrap root.
+  Never give the tools the operator's keys or profile.
 
 Limitations: the wrapper guards the supported path only. Running `terraform`
 directly, or with an administrator's keys in the shell, bypasses it; the
@@ -152,9 +168,10 @@ milestone evidence document, because the file does not.
 
 ## Lifecycle (each step needs its own explicit approval)
 
-1. Read-only preflight: `aws sts get-caller-identity` (assumed-role in the
-   expected account) and `aws cognito-idp list-user-pools --max-results 60`
-   (confirm nothing unrelated shares the account).
+1. Read-only preflight, as the operator (neither evaluation role can list pools):
+   `aws sts get-caller-identity` (expected account) and
+   `aws cognito-idp list-user-pools --max-results 60` (confirm nothing unrelated
+   shares the account).
 2. `python scripts/identity_eval_terraform.py plan --expected-account-id <acct>
    --expires-on <YYYY-MM-DD> --out m85.tfplan --confirm-live` -> review (expect
    9 to add) -> record the printed `plan_sha256` -> `python
@@ -167,7 +184,8 @@ milestone evidence document, because the file does not.
    run that makes no AWS call.
 4. The same wrapper with `plan-destroy ... --out m85-destroy.tfplan` -> review
    (expect 9 to destroy) -> `apply` with that plan and its recorded SHA-256.
-5. Independent cleanup checks (`list-user-pools` shows no evaluation pool);
+5. Independent cleanup checks, as the operator (`list-user-pools` shows no
+   evaluation pool);
    delete `terraform.tfstate*`, `*.tfplan` and the harness manifest directory.
 
 Recovery after an interrupted run (same credentials and guard arguments):
