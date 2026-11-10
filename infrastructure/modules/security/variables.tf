@@ -48,9 +48,3 @@ variable "bedrock_embedding_model_id" {
   description = "Foundation model ID used for embeddings"
   type        = string
 }
-
-variable "app_port" {
-  description = "Port the application container listens on"
-  type        = number
-  default     = 8000
-}

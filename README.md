@@ -278,7 +278,7 @@ synthetic-data/   Synthetic document corpus (no real data)
   - The 11 scanner exceptions must be reviewed again by 2027-02-04.
   - The runtime image installs the exact Debian security build of `zlib1g` until the official base image includes it.
 - **Stateless tokens:** revocation and group removal take effect only at access-token expiry; keep lifetimes short.
-- **Cleanup:** an unused ALB security group is an open remediation item.
+- **Alarm notification and secret rotation not implemented:** alarms are state-only (no approved SNS destination), and runtime database secret rotation is not automated. These are production-hardening items, recorded as five Checkov risk-acceptance exceptions (four CKV_AWS_319, one CKV2_AWS_57) due for review by 2027-02-04 ([runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md#infrastructure-cleanup-and-checkov-skips)).
 
 ## Future production architecture — not implemented
 
