@@ -1,0 +1,394 @@
+{
+  "account_guard": {
+    "account_verified": true,
+    "credential_type": "assumed-role",
+    "role": "rag-eval-harness"
+  },
+  "cases": [
+    {
+      "expected": "issuer and jwks_uri match configuration; RS256 advertised",
+      "id": "R-01",
+      "note": "",
+      "observed": {
+        "id_token_signing_algs": [
+          "RS256"
+        ],
+        "issuer_matches": true,
+        "jwks_uri_matches_derived": true
+      },
+      "status": "PASS",
+      "title": "Issuer discovery"
+    },
+    {
+      "expected": ">=2 unique RSA RS256 sig keys accepted by verifier validation",
+      "id": "R-02",
+      "note": "",
+      "observed": {
+        "accepted_by_verifier_validation": true,
+        "alg": [
+          "RS256"
+        ],
+        "key_count": 2,
+        "kids_unique": true,
+        "kty": [
+          "RSA"
+        ],
+        "use": [
+          "sig"
+        ]
+      },
+      "status": "PASS",
+      "title": "Real JWKS shape"
+    },
+    {
+      "expected": "verifies; tenant-a/reader; token_use=access; no aud; 200 as tenant-a",
+      "id": "R-03",
+      "note": "",
+      "observed": {
+        "access_token_lifetime_seconds": 300,
+        "aud_present": false,
+        "claim_names": [
+          "auth_time",
+          "client_id",
+          "cognito:groups",
+          "event_id",
+          "exp",
+          "iat",
+          "iss",
+          "jti",
+          "origin_jti",
+          "scope",
+          "sub",
+          "token_use",
+          "username"
+        ],
+        "client_id_is_app_client": true,
+        "groups": [
+          "role:reader",
+          "tenant:tenant-a"
+        ],
+        "http_status": 200,
+        "mapping": "ok",
+        "role": "reader",
+        "store_contexts": [
+          [
+            "tenant-a",
+            "reader"
+          ]
+        ],
+        "tenant": "tenant-a",
+        "token_use": "access",
+        "verify": "ok"
+      },
+      "status": "PASS",
+      "title": "Valid Cognito access token"
+    },
+    {
+      "expected": "admin-a generate 200; ingestor-b query 200 as tenant-b; ingestor generate 403",
+      "id": "R-04",
+      "note": "",
+      "observed": {
+        "admin_a_generate": 200,
+        "admin_a_model_calls": 1,
+        "ingestor_b_contexts": [
+          [
+            "tenant-b",
+            "ingestor"
+          ]
+        ],
+        "ingestor_b_generate": 403,
+        "ingestor_b_generate_model_calls": 0,
+        "ingestor_b_query": 200
+      },
+      "status": "PASS",
+      "title": "Role and tenant from real groups"
+    },
+    {
+      "expected": "401 missing_claim (no client_id) or wrong_token_use",
+      "id": "R-05",
+      "note": "",
+      "observed": {
+        "http_body_generic": true,
+        "http_status": 401,
+        "id_token_has_client_id": false,
+        "id_token_token_use": "id",
+        "reason": "missing_claim"
+      },
+      "status": "PASS",
+      "title": "ID token rejected"
+    },
+    {
+      "expected": "401 wrong_client",
+      "id": "R-06",
+      "note": "",
+      "observed": {
+        "http_status": 401,
+        "reason": "wrong_client"
+      },
+      "status": "PASS",
+      "title": "Token from a non-allowlisted client"
+    },
+    {
+      "expected": "payload swap / foreign re-sign -> invalid_signature; alg=none with empty signature -> malformed_token; alg=none or HS256 -> invalid_algorithm",
+      "id": "R-07",
+      "note": "",
+      "observed": {
+        "alg_hs256_confusion": {
+          "http_status": 401,
+          "reason": "invalid_algorithm"
+        },
+        "alg_none_empty_signature": {
+          "http_status": 401,
+          "reason": "malformed_token"
+        },
+        "alg_none_with_signature": {
+          "http_status": 401,
+          "reason": "invalid_algorithm"
+        },
+        "payload_swapped": {
+          "http_status": 401,
+          "reason": "invalid_signature"
+        },
+        "resigned_foreign_key": {
+          "http_status": 401,
+          "reason": "invalid_signature"
+        }
+      },
+      "status": "PASS",
+      "title": "Tampered tokens"
+    },
+    {
+      "expected": "authentic tokens; 403 identity_mapping_denied / unknown_tenant",
+      "id": "R-08",
+      "note": "",
+      "observed": {
+        "nogroups": {
+          "groups": [],
+          "groups_claim_present": false,
+          "http_body_generic": true,
+          "http_status": 403,
+          "mapping": "identity_mapping_denied",
+          "verify": "ok"
+        },
+        "tenant-only": {
+          "groups": [
+            "tenant:tenant-a"
+          ],
+          "groups_claim_present": true,
+          "http_body_generic": true,
+          "http_status": 403,
+          "mapping": "identity_mapping_denied",
+          "verify": "ok"
+        },
+        "two-tenants": {
+          "groups": [
+            "role:reader",
+            "tenant:tenant-a",
+            "tenant:tenant-b"
+          ],
+          "groups_claim_present": true,
+          "http_body_generic": true,
+          "http_status": 403,
+          "mapping": "identity_mapping_denied",
+          "verify": "ok"
+        },
+        "unknown-tenant": {
+          "groups": [
+            "role:reader",
+            "tenant:tenant-z"
+          ],
+          "groups_claim_present": true,
+          "http_body_generic": true,
+          "http_status": 403,
+          "mapping": "unknown_tenant",
+          "verify": "ok"
+        }
+      },
+      "status": "PASS",
+      "title": "Missing or ambiguous tenant/role groups"
+    },
+    {
+      "expected": "401 wrong_issuer after a successful real JWKS fetch; control accepts",
+      "id": "R-09",
+      "note": "",
+      "observed": {
+        "control_correct_issuer_accepts": true,
+        "jwks_available": true,
+        "real_jwks_fetches": 1,
+        "reason": "wrong_issuer"
+      },
+      "status": "PASS",
+      "title": "Wrong issuer with a reachable, valid key set"
+    },
+    {
+      "expected": "20 verifications, 1 JWKS fetch",
+      "id": "R-11",
+      "note": "",
+      "observed": {
+        "jwks_fetches": 1,
+        "outcomes": [
+          "ok"
+        ],
+        "verifications": 20
+      },
+      "status": "PASS",
+      "title": "JWKS cache"
+    },
+    {
+      "expected": "401 unknown_kid; <=2 JWKS fetches across 7 verifications; valid token unaffected",
+      "id": "R-12",
+      "note": "",
+      "observed": {
+        "jwks_fetches": 1,
+        "unknown_kid_reasons": [
+          "unknown_kid"
+        ],
+        "valid_after": "ok",
+        "valid_before": "ok"
+      },
+      "status": "PASS",
+      "title": "Unknown kid refresh is bounded"
+    },
+    {
+      "expected": "503 Authentication unavailable; failure backoff keeps it to 1 fetch",
+      "id": "R-13",
+      "note": "",
+      "observed": {
+        "http_body_generic": true,
+        "http_status": 503,
+        "jwks_fetches": 1,
+        "reasons": [
+          "unavailable:jwks_unavailable"
+        ]
+      },
+      "status": "PASS",
+      "title": "JWKS endpoint unavailable"
+    },
+    {
+      "expected": "rotation cannot be triggered on a Cognito user pool",
+      "id": "R-14",
+      "note": "Rotation, cache refresh and outage behavior are covered by app/tests/test_oidc_verification.py; live key selection by kid is R-02/R-12.",
+      "observed": {
+        "access_and_id_kids_differ": true,
+        "access_token_kid_published": true,
+        "id_token_kid_published": true,
+        "jwks_key_count": 2
+      },
+      "status": "NOT_TESTABLE",
+      "title": "Signing key rotation"
+    },
+    {
+      "expected": "tenant-a rows only",
+      "id": "R-15",
+      "note": "--rls-database-url not provided",
+      "observed": {},
+      "status": "SKIPPED",
+      "title": "Real token through PostgreSQL RLS (optional)"
+    },
+    {
+      "expected": "old token keeps the group until exp (documented); new token denied",
+      "id": "R-16",
+      "note": "Stateless verification: group changes apply at next token issue (<=5 min).",
+      "observed": {
+        "new_token_mapping": "identity_mapping_denied",
+        "old_token_mapping": "ok"
+      },
+      "status": "LIMITATION_CONFIRMED",
+      "title": "Group removed mid-session"
+    },
+    {
+      "expected": "access token valid until exp (documented); refresh rejected",
+      "id": "R-17",
+      "note": "Local JWT verification cannot observe revocation; bounded by token lifetime.",
+      "observed": {
+        "old_access_token": "ok",
+        "refresh_after_sign_out": "NotAuthorizedException"
+      },
+      "status": "LIMITATION_CONFIRMED",
+      "title": "Global sign-out"
+    },
+    {
+      "expected": "401 expired_token after exp + leeway",
+      "id": "R-10",
+      "note": "",
+      "observed": {
+        "http_status": 401,
+        "reason": "expired_token",
+        "waited_seconds": 326
+      },
+      "status": "PASS",
+      "title": "Expired token"
+    },
+    {
+      "expected": "0 registered values, JWT-shaped strings or authorization-header values in output",
+      "id": "R-18",
+      "note": "",
+      "observed": {
+        "bearer_prefix": 0,
+        "detector_self_test": true,
+        "jwt_shaped": 0,
+        "registered_secret_count": 118,
+        "registered_values": 0
+      },
+      "status": "PASS",
+      "title": "No token or secret material in logs"
+    }
+  ],
+  "cleanup": {
+    "already_absent": [],
+    "deleted": [
+      "m85-eval-bae36d82-admin-a",
+      "m85-eval-bae36d82-expiry",
+      "m85-eval-bae36d82-group-change",
+      "m85-eval-bae36d82-ingestor-b",
+      "m85-eval-bae36d82-nogroups",
+      "m85-eval-bae36d82-reader-a",
+      "m85-eval-bae36d82-sign-out",
+      "m85-eval-bae36d82-tenant-only",
+      "m85-eval-bae36d82-two-tenants",
+      "m85-eval-bae36d82-unknown-tenant"
+    ],
+    "errors": [],
+    "interrupted": false,
+    "prefix": "m85-eval-bae36d82-",
+    "remaining_get_user": [],
+    "remaining_listed": [],
+    "users_targeted": 10,
+    "verification_errors": [],
+    "verified": true
+  },
+  "error": null,
+  "evidence_policy": "No tokens, passwords, subject identifiers or token segments are recorded; claim names, bounded reasons, status codes and synthetic group names only.",
+  "finished_utc": "2026-11-10T00:00:53+00:00",
+  "guard": {
+    "pool_name_prefix": "rag-identity-eval-m85",
+    "required_tags_present": true
+  },
+  "harness": "evaluations/live/m8_5_cognito.py",
+  "milestone": "M8.5",
+  "overall": "PASS",
+  "region": "us-east-1",
+  "run_id": "bae36d82",
+  "run_status": "completed",
+  "started_utc": "2026-11-09T23:55:03+00:00",
+  "user_pool_id": "us-east-1_3cdXoEl5g",
+  "verifier": {
+    "algorithm": "RS256",
+    "jwks_cache_ttl_seconds": 300,
+    "jwks_refresh_cooldown_seconds": 30,
+    "leeway_seconds": 30,
+    "module": "app.auth.oidc.build_oidc_verifier",
+    "required_claims": [
+      "exp",
+      "iat",
+      "iss",
+      "sub",
+      "token_use",
+      "client_id"
+    ],
+    "tenant_allowlist": [
+      "tenant-a",
+      "tenant-b"
+    ]
+  }
+}
