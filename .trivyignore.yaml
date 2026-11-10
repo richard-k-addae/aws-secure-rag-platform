@@ -1,44 +1,49 @@
+# Exact, time-boxed Trivy exceptions. An exception is not a mitigation: it
+# records a finding that has no fixed package for the base distribution and
+# whose reachability has been assessed. Fixable findings are remediated, never
+# listed here. Last full review: 2026-11-10 (Trivy 0.70.0; Debian security
+# tracker and apt candidates in trixie, trixie-updates and trixie-security).
 vulnerabilities:
   - id: CVE-2025-69720
-    expired_at: 2026-12-04
-    statement: "Packages: libncursesw6, libtinfo6, ncurses-base, ncurses-bin. No fixed Debian 13 package is currently available. Local buffer overflow that needs a user to process crafted terminal data; the container runs one non-interactive service with no terminal sessions. Depends on: non-root user (limits impact if reached)."
+    expired_at: 2027-02-04
+    statement: "Packages: libncursesw6, libtinfo6, ncurses-base, ncurses-bin (6.5+20250216-2). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie vulnerable, fixed in forky/sid 6.6+20260608-2; checked 2026-11-10). Local buffer overflow that needs a user to process crafted terminal data; the container runs one non-interactive service with no terminal sessions. Reachability: low. Depends on: non-root user (limits impact if reached). This exception is not a mitigation."
 
   - id: CVE-2026-16742
-    expired_at: 2026-12-04
-    statement: "Packages: libsystemd0, libudev1. No fixed Debian 13 package is currently available. The flaw is in the systemd-homed service, which is not installed or running in the image; only the shared libraries are present. Does not depend on a runtime mitigation."
+    expired_at: 2027-02-04
+    statement: "Packages: libsystemd0, libudev1 (257.13-1~deb13u1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie vulnerable, fixed in forky 262-1 and sid 262.2-1; checked 2026-11-10). The flaw is in the systemd-homed service, which is not installed in the image (no systemd-homed or homectl); only the shared libraries are present. Reachability: low. Does not depend on a runtime mitigation. This exception is not a mitigation."
 
   - id: CVE-2026-54369
-    expired_at: 2026-12-04
-    statement: "Packages: libacl1. No fixed Debian 13 package is currently available. Local symlink-traversal privilege escalation that needs a privileged process using libacl on attacker-controlled paths; no such process runs in the container. Depends on: non-root user, read-only root filesystem, no privileged mode."
+    expired_at: 2027-02-04
+    statement: "Packages: libacl1 (2.3.2-2+b1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie vulnerable, fixed in forky/sid 2.4.0-1; checked 2026-11-10). Local symlink-traversal privilege escalation that needs a privileged process using libacl on attacker-controlled paths; no such process runs in the container. Reachability: low. Depends on: non-root user, read-only root filesystem, no privileged mode. This exception is not a mitigation."
 
   - id: CVE-2026-76642
-    expired_at: 2026-12-04
-    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in privileged mount post-hooks; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
+    expired_at: 2027-02-04
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2 (2.41.5-0+deb13u1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and trixie-security vulnerable, fixed in forky/sid 2.42.4-1; checked 2026-11-10). Flaw in privileged mount post-hooks; mounting needs CAP_SYS_ADMIN, which the task does not have. Reachability: low. Depends on: Linux capabilities dropped, no privileged mode, non-root user. This exception is not a mitigation."
 
   - id: CVE-2026-78408
-    expired_at: 2026-12-04
-    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in nsenter --join-cgroup, which needs privileges to enter namespaces that the task will not have; the application never runs nsenter. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
+    expired_at: 2027-02-04
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2 (2.41.5-0+deb13u1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and trixie-security vulnerable, fixed in forky/sid 2.42.4-1; checked 2026-11-10). Flaw in nsenter --join-cgroup, which needs privileges to enter namespaces that the task does not have; the application never runs nsenter or any subprocess. Reachability: low. Depends on: Linux capabilities dropped, no privileged mode, non-root user. This exception is not a mitigation."
 
   - id: CVE-2026-78409
-    expired_at: 2026-12-04
-    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in the X-mount.subdir mount option; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
+    expired_at: 2027-02-04
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2 (2.41.5-0+deb13u1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and trixie-security vulnerable, fixed in forky/sid 2.42.4-1; checked 2026-11-10). Flaw in the X-mount.subdir mount option, which needs an fstab-authorized entry and mount privileges; the task has no such entry and does not have CAP_SYS_ADMIN. Reachability: low. Depends on: Linux capabilities dropped, no privileged mode, non-root user. This exception is not a mitigation."
 
   - id: CVE-2026-78410
-    expired_at: 2026-12-04
-    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2. No fixed Debian 13 package is currently available. Flaw in restricted bind mounts; mounting needs CAP_SYS_ADMIN, which the task will not have. Depends on: Linux capabilities dropped, no privileged mode, non-root user."
+    expired_at: 2027-02-04
+    statement: "Packages: util-linux, mount, login, bsdutils, libmount1, libblkid1, libsmartcols1, libuuid1, liblastlog2-2 (2.41.5-0+deb13u1). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and trixie-security vulnerable, fixed in forky/sid 2.42.4-1; checked 2026-11-10). Flaw in restricted bind mounts; mounting needs CAP_SYS_ADMIN, which the task does not have. Reachability: low. Depends on: Linux capabilities dropped, no privileged mode, non-root user. This exception is not a mitigation."
 
   - id: CVE-2026-9538
-    expired_at: 2026-12-04
-    statement: "Packages: perl-base. Debian 13 marks the fix as deferred; no fixed package is currently available. Denial of service when Perl's Archive::Tar parses a crafted archive; the application is Python and never invokes Perl. Does not depend on a runtime mitigation."
+    expired_at: 2027-02-04
+    statement: "Packages: perl-base (5.40.1-6+deb13u1). Fix status: no fixed Debian 13 (Trixie) package; Trivy reports fix_deferred (tracker: trixie vulnerable, fixed in forky/sid 5.42.3-1; checked 2026-11-10). Denial of service when Perl's Archive::Tar parses a crafted archive; /usr/bin/perl is present, but the application is Python and never invokes Perl or any subprocess. Reachability: low. Does not depend on a runtime mitigation. This exception is not a mitigation."
 
   - id: CVE-2026-119373
-    expired_at: 2026-12-04
-    statement: "Packages: libsqlite3-0. No fixed Debian 13 (Trixie) package is currently available. Heap buffer overflow in SQLite FTS5 prefix merging (detail=none tables). The package is inherited from the python:3.11-slim-trixie base image; the application does not intentionally use SQLite or FTS5. Reachability is assessed as low, not impossible; this is not a mitigation. Temporary exception pending an upstream/Debian fixed package."
+    expired_at: 2027-02-04
+    statement: "Packages: libsqlite3-0 (3.46.1-7+deb13u2). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and forky vulnerable, fixed only in sid 3.54.1-2; checked 2026-11-10). Heap buffer overflow in SQLite FTS5 prefix merging (detail=none tables). FTS5 is compiled into the inherited package (ENABLE_FTS5), but neither the application nor any installed runtime Python dependency imports or uses sqlite3; importing app.main does not load it; there is no sqlite3 CLI; application persistence is PostgreSQL. Reachability: low, not impossible; it depends on no future code opening or creating untrusted SQLite FTS5 tables. This exception is not a mitigation."
 
   - id: CVE-2026-119374
-    expired_at: 2026-12-04
-    statement: "Packages: libsqlite3-0 (3.46.1-7+deb13u2). No fixed Debian 13 (Trixie) package is currently available (Debian tracker: trixie vulnerable, fixed only in sid 3.54.1-2; checked 2026-11-09). Heap buffer overflow in SQLite FTS5 secure-delete processing of a corrupted FTS5 index (fts5DoSecureDelete). FTS5 is compiled into the inherited package (ENABLE_FTS5), but neither the application nor any installed runtime Python dependency imports or uses sqlite3; importing app.main does not load it; application persistence is PostgreSQL. In the image only Python's _sqlite3 module and liblastlog2 link libsqlite3. Reachability is assessed as low, not impossible; it depends on no future code opening untrusted SQLite databases. Non-root execution is not claimed as a mitigation. This exception is not a mitigation; remove it when Debian ships a fixed Trixie package."
+    expired_at: 2027-02-04
+    statement: "Packages: libsqlite3-0 (3.46.1-7+deb13u2). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and forky vulnerable, fixed only in sid 3.54.1-2; checked 2026-11-10). Heap buffer overflow in SQLite FTS5 secure-delete processing of a corrupted FTS5 index (fts5DoSecureDelete). FTS5 is compiled into the inherited package (ENABLE_FTS5), but neither the application nor any installed runtime Python dependency imports or uses sqlite3; importing app.main does not load it; application persistence is PostgreSQL. In the image only Python's _sqlite3 module and liblastlog2 (used by lslogins) link libsqlite3. Reachability: low, not impossible; it depends on no future code opening untrusted SQLite databases. Non-root execution is not claimed as a mitigation. This exception is not a mitigation."
 
   - id: CVE-2026-119379
-    expired_at: 2026-12-04
-    statement: "Packages: libsqlite3-0 (3.46.1-7+deb13u2). No fixed Debian 13 (Trixie) package is currently available (Debian tracker: trixie vulnerable, fixed only in sid 3.54.1-2; checked 2026-11-09). Heap buffer overflow in SQLite Session Extension changeset processing (sqlite3changeset_apply). The session extension is compiled into the inherited package (ENABLE_SESSION), but Python's sqlite3 API does not expose the session API and no runtime binary or package in the image references sqlite3changeset_*, sqlite3session_*, sqlite3changegroup_* or sqlite3rebaser_* (ELF import scan). Reachability is assessed as low, not impossible: future native code could call the API. This exception is not a mitigation; remove it when Debian ships a fixed Trixie package."
+    expired_at: 2027-02-04
+    statement: "Packages: libsqlite3-0 (3.46.1-7+deb13u2). Fix status: no fixed Debian 13 (Trixie) package (tracker: trixie and forky vulnerable, fixed only in sid 3.54.1-2; checked 2026-11-10). Heap buffer overflow in SQLite Session Extension changeset processing (sqlite3changeset_apply). The session extension is compiled into the inherited package (ENABLE_SESSION), but Python's sqlite3 API does not expose the session API and no ELF object in the image other than libsqlite3 itself references sqlite3changeset_*, sqlite3session_*, sqlite3changegroup_* or sqlite3rebaser_* (re-scanned 2026-11-10). Reachability: low, not impossible: future native code could call the API. This exception is not a mitigation."
