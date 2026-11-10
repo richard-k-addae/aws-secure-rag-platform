@@ -64,14 +64,24 @@ Access tokens are verified statelessly: a revoked token or removed group
 stays effective until the access token expires (R15). Keep production
 access-token lifetimes short.
 
-## Open infrastructure cleanup
+## Infrastructure cleanup and Checkov skips
 
-- **Unused ALB security group** (`aws_security_group.alb` in
-  `infrastructure/modules/security/main.tf`, with its `alb_to_ecs` and
-  `ecs_from_alb` rules): kept from the deferred ALB/TLS phase, attached to
-  nothing, no public ingress. Classified **REMEDIATE** (Checkov CKV2_AWS_5
-  skip marked open); remove in a later reviewed infrastructure change, or
-  re-decide, by 2026-12-04.
+- **Unused ALB security group: closed 2026-11-10.** `aws_security_group.alb`,
+  its `alb_to_ecs` and `ecs_from_alb` rules, its CKV2_AWS_5 skip and the
+  `alb_security_group_id` output were removed. No ingress path exists; a
+  future ALB or API Gateway would need its own reviewed security group.
+- **CKV2_AWS_12 no longer needs a skip (removed 2026-11-10).** The default
+  security group is managed with no ingress and no egress, and Checkov passes it.
+
+Remaining inline Checkov skips (six; `checkov.yml` has no global skips). An
+exception is not a mitigation: SNS alarm notification and automatic secret
+rotation are production-hardening items, **not implemented controls**.
+
+| Check | Resource | Type | Why | Review by |
+|---|---|---|---|---|
+| CKV2_AWS_5 | `aws_security_group.ecs` | Verified tool limitation, not a risk acceptance | The group is attached to the ECS service across a module boundary that Checkov does not resolve | No date (re-verify when Checkov is upgraded) |
+| CKV_AWS_319 (×4) | Alarms in `environments/dev/alarms.tf` | Risk acceptance | Alarms exist and change state, but no SNS destination is approved, so they notify no one | 2027-02-04 |
+| CKV2_AWS_57 | `aws_secretsmanager_secret.runtime` | Risk acceptance | Automatic rotation is not implemented; safe rotation needs coordinated PostgreSQL, Secrets Manager and application changes | 2027-02-04 |
 
 ## Planned production flow
 

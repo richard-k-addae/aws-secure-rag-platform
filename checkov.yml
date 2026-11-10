@@ -2,6 +2,6 @@
 directory:
   - infrastructure
 quiet: true
-skip-check:
-  # CKV2_AWS_12: default SG is already restricted to no ingress/egress
-  - CKV2_AWS_12
+# No global skips. Any exception is an inline, justified checkov:skip on the
+# specific resource. CKV2_AWS_12 was skipped globally until 2026-11-10; it now
+# passes on the explicitly empty aws_default_security_group.

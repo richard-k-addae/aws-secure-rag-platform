@@ -7,7 +7,7 @@
 
 # --- A. RLS violation (DETERMINISTIC) ----------------------------------------
 resource "aws_cloudwatch_metric_alarm" "security_rls_violation" {
-  # checkov:skip=CKV_AWS_319: No SNS notification destination is approved yet (M6.5B). Alarm remains state-only (actions_enabled = false) by explicit design until a destination is reviewed and attached. Renewed with justification on 2026-11-04 (deferred control decision); review by 2026-12-04.
+  # checkov:skip=CKV_AWS_319: Risk acceptance, not a mitigation. The alarm exists and changes state, but notification is not implemented: no SNS destination is approved (M6.5B), so it is state-only (actions_enabled = false, no actions). Adding notification infrastructure is new operational functionality outside the closed portfolio scope, and the runtime is costed down. Production-hardening item. Renewed 2026-11-10; review by 2027-02-04.
   alarm_name          = "rag-platform-${var.environment}-security-rls-violation"
   alarm_description   = "Fires when rag.security.events records a row-level-security violation (event=rls_violation). Deterministic: any occurrence is a confirmed security signal, not a threshold judgment."
   namespace           = local.observability_namespace
@@ -28,7 +28,7 @@ resource "aws_cloudwatch_metric_alarm" "security_rls_violation" {
 
 # --- B. Running task deficit (INFRASTRUCTURE SAFETY) -------------------------
 resource "aws_cloudwatch_metric_alarm" "ecs_running_task_deficit" {
-  # checkov:skip=CKV_AWS_319: No SNS notification destination is approved yet (M6.5B). Alarm remains state-only (actions_enabled = false) by explicit design until a destination is reviewed and attached. Renewed with justification on 2026-11-04 (deferred control decision); review by 2026-12-04.
+  # checkov:skip=CKV_AWS_319: Risk acceptance, not a mitigation. The alarm exists and changes state, but notification is not implemented: no SNS destination is approved (M6.5B), so it is state-only (actions_enabled = false, no actions). Adding notification infrastructure is new operational functionality outside the closed portfolio scope, and the runtime is costed down. Production-hardening item. Renewed 2026-11-10; review by 2027-02-04.
   alarm_name          = "rag-platform-${var.environment}-running-task-deficit"
   alarm_description   = "Fires when RunningTaskCount falls below DesiredTaskCount. Uses metric math so a deliberate scale-to-zero (DesiredTaskCount = 0) never alarms."
   comparison_operator = "GreaterThanOrEqualToThreshold"
@@ -75,7 +75,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_running_task_deficit" {
 
 # --- C. CPU high (PROVISIONAL) ------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
-  # checkov:skip=CKV_AWS_319: No SNS notification destination is approved yet (M6.5B). Alarm remains state-only (actions_enabled = false) by explicit design until a destination is reviewed and attached. Renewed with justification on 2026-11-04 (deferred control decision); review by 2026-12-04.
+  # checkov:skip=CKV_AWS_319: Risk acceptance, not a mitigation. The alarm exists and changes state, but notification is not implemented: no SNS destination is approved (M6.5B), so it is state-only (actions_enabled = false, no actions). Adding notification infrastructure is new operational functionality outside the closed portfolio scope, and the runtime is costed down. Production-hardening item. Renewed 2026-11-10; review by 2027-02-04.
   alarm_name          = "rag-platform-${var.environment}-cpu-high"
   alarm_description   = "Provisional threshold pending baseline."
   namespace           = "AWS/ECS"
@@ -97,7 +97,7 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
 
 # --- D. Memory high (PROVISIONAL) --------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "ecs_memory_high" {
-  # checkov:skip=CKV_AWS_319: No SNS notification destination is approved yet (M6.5B). Alarm remains state-only (actions_enabled = false) by explicit design until a destination is reviewed and attached. Renewed with justification on 2026-11-04 (deferred control decision); review by 2026-12-04.
+  # checkov:skip=CKV_AWS_319: Risk acceptance, not a mitigation. The alarm exists and changes state, but notification is not implemented: no SNS destination is approved (M6.5B), so it is state-only (actions_enabled = false, no actions). Adding notification infrastructure is new operational functionality outside the closed portfolio scope, and the runtime is costed down. Production-hardening item. Renewed 2026-11-10; review by 2027-02-04.
   alarm_name          = "rag-platform-${var.environment}-memory-high"
   alarm_description   = "Provisional threshold pending baseline."
   namespace           = "AWS/ECS"

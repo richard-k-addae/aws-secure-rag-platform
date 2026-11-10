@@ -1,5 +1,6 @@
-# Security module: security groups for the ALB, ECS tasks and interface
-# endpoints, plus the VPC endpoints that keep AWS service traffic private.
+# Security module: security groups for ECS tasks and interface endpoints,
+# plus the VPC endpoints that keep AWS service traffic private. No ingress
+# path (ALB, API Gateway) is implemented; see the deployment runbook.
 
 data "aws_region" "current" {}
 
@@ -139,19 +140,8 @@ locals {
   })
 }
 
-resource "aws_security_group" "alb" {
-  # checkov:skip=CKV2_AWS_5: REMEDIATE (open, not resolved). Unused security group with no attached resource and no public ingress, kept from the deferred ALB/TLS phase; scheduled for removal together with its alb_to_ecs/ecs_from_alb rules in a later infrastructure cleanup (see docs/runbooks/DEPLOYMENT_RUNBOOK.md). Remediate or re-decide by 2026-12-04.
-  name        = "rag-platform-${var.environment}-alb-sg"
-  description = "Security group for the application load balancer"
-  vpc_id      = var.vpc_id
-
-  tags = {
-    Name = "rag-platform-${var.environment}-alb-sg"
-  }
-}
-
 resource "aws_security_group" "ecs" {
-  # checkov:skip=CKV2_AWS_5: Checkov tool limitation, not a risk acceptance. The group is attached to aws_ecs_service in the ECS child module via module output/input; CKV2_AWS_5 cannot resolve the cross-module attachment.
+  # checkov:skip=CKV2_AWS_5: Checkov tool limitation, not a risk acceptance. The group is attached to aws_ecs_service in the ECS child module via module output/input; CKV2_AWS_5 cannot resolve the cross-module attachment. Re-verified 2026-11-10 with Checkov 3.4.3: in-module attachments (endpoints, RDS) pass; only this cross-module one is reported.
   name        = "rag-platform-${var.environment}-ecs-sg"
   description = "Security group for ECS Fargate tasks"
   vpc_id      = var.vpc_id
@@ -169,24 +159,6 @@ resource "aws_security_group" "endpoints" {
   tags = {
     Name = "rag-platform-${var.environment}-endpoints-sg"
   }
-}
-
-resource "aws_vpc_security_group_egress_rule" "alb_to_ecs" {
-  security_group_id            = aws_security_group.alb.id
-  description                  = "Application traffic to ECS tasks only"
-  ip_protocol                  = "tcp"
-  from_port                    = var.app_port
-  to_port                      = var.app_port
-  referenced_security_group_id = aws_security_group.ecs.id
-}
-
-resource "aws_vpc_security_group_ingress_rule" "ecs_from_alb" {
-  security_group_id            = aws_security_group.ecs.id
-  description                  = "Application traffic from ALB only"
-  ip_protocol                  = "tcp"
-  from_port                    = var.app_port
-  to_port                      = var.app_port
-  referenced_security_group_id = aws_security_group.alb.id
 }
 
 resource "aws_vpc_security_group_egress_rule" "ecs_to_endpoints" {
