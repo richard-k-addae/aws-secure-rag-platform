@@ -23,7 +23,7 @@
 3. FastAPI service on ECS Fargate (private subnet, no public IP) verifies the access token and derives tenant and role from its groups (implemented in M8; the deployed network has no JWKS path yet, R14).
 4. Retrieval: query embedded, pgvector searched with metadata filters INCLUDING document-level authorization for the caller's role.
 5. Retrieved chunks + user query -> Bedrock (via VPC endpoint), framed with per-request unforgeable boundaries; answer checked for valid citations and sensitive output before return.
-6. Response returned with source citations; metadata (tokens, latency, model ID, withheld-answer reasons) logged redacted; request record written to DynamoDB.
+6. Response returned with source citations; metadata (tokens, latency, model ID, withheld-answer reasons) logged redacted. Target / not implemented: request record written to DynamoDB.
 
 ## Ingestion flow (target, Phase 3 — not implemented)
 

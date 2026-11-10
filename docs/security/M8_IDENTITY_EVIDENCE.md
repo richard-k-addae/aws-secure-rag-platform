@@ -94,7 +94,10 @@ endpoint (prerequisite 1) and any production user pool (prerequisite 3).
 
 ## Deployment prerequisites (open)
 
-Determined from the Terraform source; nothing was provisioned.
+Determined from the Terraform source; nothing in the application stack was
+provisioned for M8. (The temporary M8.5 Cognito evaluation resources and
+bootstrap IAM roles were provisioned, exercised and destroyed separately; see
+"Live Cognito verification (M8.5)" above.)
 
 1. **JWKS network path (R14, blocker).** ECS tasks run in private subnets
    with no NAT gateway (`infrastructure/modules/networking/main.tf`: only the
@@ -119,8 +122,8 @@ Determined from the Terraform source; nothing was provisioned.
    enforcement gate.
 5. Remaining gate items in the
    [M7 register](M7_AI_SECURITY_EVIDENCE_INDEX.md#deployment-gate): R2, R7,
-   R9, plus TLS ingress (the ALB phase is deferred). R8 is closed: CI is green on
-   `main`.
+   R9, plus TLS ingress (the ALB phase is deferred). R8 is closed: CI was green on
+   the PR #49 merge to `main` (`5d9475a`).
 
 ## Residual risks introduced or restated by M8
 
@@ -131,7 +134,7 @@ Determined from the Terraform source; nothing was provisioned.
 | R15 | Stateless verification: revocation and group removal effective only at token expiry | Open; short token lifetimes |
 | R16 | Dev image digests predate M8 | Open; deployment blocker |
 | R17 | Management-account placement and long-lived administrator credentials (with R10) | Open; acknowledged |
-| R8 | CI on the M8 changes | Closed: CI, Security and Terraform green on `main` |
+| R8 | CI on the M8 changes | Closed: CI, Security and Terraform green on the PR #49 merge to `main` (`5d9475a`) |
 
 ## Verification performed for M8.6
 

@@ -6,10 +6,10 @@
 
 | | |
 |---|---|
-| **Scope** | M1–M8.5 complete; final merge PR #53 (`7a3e8fe`) on `main` |
+| **Scope** | M1–M8.5 complete; M8.5 closure merged in PR #53 (`7a3e8fe`). `main` has since received dependency-maintenance updates and a networking availability-zone pinning fix |
 | **Identity (ID-01)** | Closed: verified Cognito/OIDC boundary, real PostgreSQL RLS integration, live Cognito token and JWKS compatibility |
 | **Live Cognito validation** | **PASS**, run `bae36d82`: 18 cases, cleanup verified; temporary pool and IAM roles destroyed |
-| **Pipelines on `main`** | CI, Security and Terraform green |
+| **Pipelines at M8.5 closure** | CI, Security and Terraform green on the PR #53 merge (`7a3e8fe`) |
 | **Container scan** | Trivy: **0 unexcepted HIGH/CRITICAL**; 11 exact, time-boxed exceptions (expire 2026-12-04) |
 | **Deployment** | Not production deployed; no AWS runtime is running. See [Deployment readiness](#deployment-readiness-and-residual-risks) |
 
@@ -91,22 +91,22 @@ There is no development bypass, and tokens, claims and keys are never logged.
 
 | Evidence | Result |
 |---|---|
-| Unit and API tests (CI `python-checks`) | Green on `main`; 736 passed locally, with the 58 PostgreSQL tests running in their own job |
-| PostgreSQL RLS integration (CI `integration-tests`, M8.4) | Green on `main`: verified tokens reach real row-level security; invalid tokens and unmappable identities never reach the database |
+| Unit and API tests (CI `python-checks`) | Green at M8.5 closure (`7a3e8fe`); 736 passed locally, with the 58 PostgreSQL tests running in their own job |
+| PostgreSQL RLS integration (CI `integration-tests`, M8.4) | Green at M8.5 closure (`7a3e8fe`): verified tokens reach real row-level security; invalid tokens and unmappable identities never reach the database |
 | Adversarial corpus | 21/21 cases enforced |
-| Security workflow | iac-scan, secret-scan, dependency-audit, gitleaks-scan, trivy-container-scan, terraform-policy-test, sbom-and-build-evidence: all green |
+| Security workflow | iac-scan, secret-scan, dependency-audit, gitleaks-scan, trivy-container-scan, terraform-policy-test, sbom-and-build-evidence: all green at M8.5 closure (`7a3e8fe`) |
 | Terraform workflow | `fmt -check` on all roots; `validate` on `dev` and `identity-eval-bootstrap` |
 | Live Cognito validation (M8.5) | PASS, run `bae36d82`, cleanup verified ([JSON evidence](evaluations/security/m8_5_live_cognito.json)) |
 
-### CI, Security and Terraform on `main`
+### CI, Security and Terraform at M8.5 closure
 
-Final `main` runs for the PR #53 merge (`7a3e8fe`):
+These are the `main` runs for the PR #53 merge (`7a3e8fe`), the validated M8.5 closure state. They are not necessarily the results for the current tip of `main`, which has since received dependency-maintenance updates and the networking availability-zone pinning fix.
 
-![CI workflow on main](docs/images/final-main-ci.png)
+![CI workflow at M8.5 closure](docs/images/final-main-ci.png)
 
-![Security workflow jobs on main](docs/images/final-security-gates.png)
+![Security workflow jobs at M8.5 closure](docs/images/final-security-gates.png)
 
-![Terraform workflow on main](docs/images/final-main-terraform.png)
+![Terraform workflow at M8.5 closure](docs/images/final-main-terraform.png)
 
 ### M8.5 live Cognito validation
 
@@ -168,7 +168,7 @@ The vector store is pgvector rather than OpenSearch Serverless. pgvector gives f
 | Observability (M6) | [M6 evidence](docs/observability/M6_OBSERVABILITY_EVIDENCE.md) · [M6 evidence index](docs/observability/M6_EVIDENCE_INDEX.md) |
 | Supply chain (M4) | [Milestone 4 evidence](docs/security/MILESTONE_4_EVIDENCE.md) · [patched ADOT build](docs/security/M6_4_ADOT_PATCHED_BUILD_EVIDENCE.md) |
 | Controls and findings | [Control traceability](docs/security/CONTROL_TRACEABILITY.md) · [Failure modes](docs/security/FAILURE_MODES.md) · [Findings](docs/security/FINDINGS.md) |
-| Governance | [Threat model](docs/governance/THREAT_MODEL.md) · [NIST AI RMF](docs/governance/NIST_AI_RMF_MAPPING.md) · [OWASP LLM Top 10 (2025)](docs/governance/OWASP_LLM_TOP_10_MAPPING.md) · [MITRE ATLAS](docs/governance/MITRE_ATLAS_MAPPING.md) |
+| Governance | [Threat model](docs/governance/THREAT_MODEL.md) · [NIST AI RMF](docs/governance/NIST_AI_RMF_MAPPING.md) · [OWASP LLM Top 10 (2025, pinned for M7; 2026 remap planned)](docs/governance/OWASP_LLM_TOP_10_MAPPING.md) · [MITRE ATLAS](docs/governance/MITRE_ATLAS_MAPPING.md) |
 | Operations | [Deployment runbook](docs/runbooks/DEPLOYMENT_RUNBOOK.md) · [AI incident response](docs/runbooks/AI_INCIDENT_RESPONSE_RUNBOOK.md) · [ADRs](docs/adr/) · [Security policy](SECURITY.md) |
 
 The M7 evidence documents are a historical snapshot. Their counts (for example the number of scanner exceptions at that time) intentionally differ from the current state. Governance mappings are alignment exercises, not certifications.
