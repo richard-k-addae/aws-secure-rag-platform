@@ -12,6 +12,14 @@ RUN uv sync --locked --no-dev --no-editable \
 
 FROM python:3.11-slim-trixie@sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79 AS runtime
 
+# CVE-2026-85091 (DSA-6613-1): the pinned official image predates the Debian
+# security fix. Upgrade only zlib1g, to the exact fixed version, from the official
+# trixie-security repository. Remove once the base digest ships this version.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade \
+       zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd -r app \
     && useradd -r -g app app \
     && rm -rf /usr/local/lib/python3.11/site-packages/pip* \
