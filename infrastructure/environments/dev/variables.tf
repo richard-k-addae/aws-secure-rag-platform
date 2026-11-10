@@ -16,6 +16,12 @@ variable "vpc_cidr" {
   default     = "10.20.0.0/16"
 }
 
+variable "availability_zone_ids" {
+  description = "Exactly two Availability Zone IDs in aws_region; defaults to us-east-1 IDs"
+  type        = list(string)
+  default     = ["use1-az1", "use1-az2"]
+}
+
 variable "bedrock_inference_profile_id" {
   description = "ID of the Bedrock inference profile used for generation"
   type        = string

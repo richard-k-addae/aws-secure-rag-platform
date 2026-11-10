@@ -1,7 +1,8 @@
 module "networking" {
-  source      = "../../modules/networking"
-  environment = var.environment
-  vpc_cidr    = var.vpc_cidr
+  source                = "../../modules/networking"
+  environment           = var.environment
+  vpc_cidr              = var.vpc_cidr
+  availability_zone_ids = var.availability_zone_ids
 }
 
 # Phase 2:
