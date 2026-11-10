@@ -2,16 +2,11 @@
 
 > A security-first, multi-tenant Retrieval-Augmented Generation service on Amazon Bedrock. Every answer is scoped by a verified Amazon Cognito identity and enforced down to PostgreSQL row-level security. Built with FastAPI, ECS Fargate, pgvector and Terraform, behind automated DevSecOps gates.
 
-**Engineering complete through M8.5.** The platform has passed live Cognito identity validation, PostgreSQL RLS integration, CI, Security, and Terraform validation. The AWS runtime is intentionally costed down and is not production deployed.
+**Engineering complete; not production deployed.** The AWS runtime is intentionally costed down.
 
-| | |
-|---|---|
-| **Scope** | M1–M8.5 complete; M8.5 closure merged in PR #53 (`7a3e8fe`). `main` has since received dependency-maintenance updates and a networking availability-zone pinning fix |
-| **Identity (ID-01)** | Closed: verified Cognito/OIDC boundary, real PostgreSQL RLS integration, live Cognito token and JWKS compatibility |
-| **Live Cognito validation** | **PASS**, run `bae36d82`: 18 cases, cleanup verified; temporary pool and IAM roles destroyed |
-| **Pipelines at M8.5 closure** | CI, Security and Terraform green on the PR #53 merge (`7a3e8fe`) |
-| **Container scan** | Trivy: **0 unexcepted HIGH/CRITICAL**; 11 exact, time-boxed exceptions (expire 2026-12-04) |
-| **Deployment** | Not production deployed; no AWS runtime is running. See [Deployment readiness](#deployment-readiness-and-residual-risks) |
+- **Verified identity end to end:** replaced caller-supplied tenant headers with verified Amazon Cognito access tokens, enforced tenant and role authorization, and validated the design against real PostgreSQL row-level security and live Cognito.
+- **AI security measured, not assumed:** a 21-case adversarial corpus gates CI, and live Amazon Bedrock testing informed an evidence-based decision not to adopt Guardrails.
+- **Governed supply chain:** hash-locked dependencies, SBOM generation, automated security gates, and zero unexcepted HIGH/CRITICAL container findings, with temporary exceptions time-boxed and documented.
 
 ![Implemented and validated architecture](docs/images/final-implemented-architecture.png)
 
@@ -28,13 +23,14 @@ All data is synthetic. This is a platform-engineering and AI-security project, n
 
 ## Key engineering outcomes
 
-- **Header-trust removed (ID-01):** caller-supplied `X-Tenant-*` headers replaced by verified Cognito access tokens, then proven against real PostgreSQL RLS and live Cognito.
 - **Live identity validation with verified cleanup:** a temporary, isolated Cognito pool was created through reviewed Terraform plans by MFA-protected, least-privilege temporary roles, exercised by an 18-case harness, and destroyed, with independent proof that nothing remained.
 - **Defense in depth for multi-tenancy:** route authorization, SQL filters and row-level security each enforce the verified tenant; the runtime database role is asserted `NOSUPERUSER NOBYPASSRLS`, not assumed.
-- **Evidence-driven AI security:** a 21-case adversarial corpus in CI and pre-registered live Bedrock evaluations, including a Guardrails comparison that led to a documented *do not adopt* decision.
-- **Governed supply chain:** hash-locked dependencies, digest-pinned images, SBOMs, and dated, exact-ID scanner exceptions. Fixable CVEs are fixed, not suppressed.
+- **Pre-registered live model evaluation:** cases and classification rules for the live Bedrock baseline and the Guardrails comparison were frozen before the first call, so the documented *do not adopt* decision rests on criteria set in advance.
+- **Fix before suppress:** digest-pinned images and dated, exact-ID scanner exceptions. Fixable CVEs are fixed, not suppressed.
 
 ## Identity and authorization
+
+M8 closed finding ID-01: caller-supplied `X-Tenant-*` headers no longer carry identity. Tenant and role now come only from a verified Cognito access token, proven against real PostgreSQL RLS (M8.4) and live Cognito (M8.5).
 
 ![Identity and authorization trust boundary](docs/images/final-identity-trust-boundary.png)
 
@@ -88,6 +84,8 @@ There is no development bypass, and tokens, claims and keys are never logged.
   - A dashboard of identity security events, plus alarms.
 
 ## Final validation evidence
+
+Milestones M1–M8.5 are complete. The M8.5 closure was merged in PR #53 (`7a3e8fe`).
 
 | Evidence | Result |
 |---|---|
@@ -150,7 +148,7 @@ The vector store is pgvector rather than OpenSearch Serverless. pgvector gives f
 - **Dependencies:** `uv.lock` hash-locked; pip-audit with `--require-hashes`.
 - **Container:**
   - Digest-pinned official base image.
-  - The Trivy HIGH/CRITICAL gate includes unfixed findings.
+  - The Trivy HIGH/CRITICAL gate includes unfixed findings. Result: **0 unexcepted HIGH/CRITICAL** findings.
 - **Exceptions:**
   - Every exception is an exact CVE ID with a reachability statement and an expiry date ([`.trivyignore.yaml`](.trivyignore.yaml): 11 entries, all expiring 2026-12-04).
   - When Debian ships a fix, it is installed rather than suppressed. CVE-2026-85091 and CVE-2026-76844 are fixed by pinning the Debian security build of `zlib1g`, and the stale CVE-2026-76844 exception was removed.
@@ -177,10 +175,24 @@ Historical Milestone 1 screenshots: [CI checks](docs/images/milestone-1-ci-check
 
 ## Quickstart (local development)
 
-Requires Docker, Python 3.11 with [uv](https://docs.astral.sh/uv/), and AWS credentials with access to the configured Bedrock generation and embedding models.
+### Fast checks (no AWS or Cognito needed)
+
+Requires Python 3.11 with [uv](https://docs.astral.sh/uv/).
 
 ```bash
-uv sync --extra dev    # local Python environment for setup scripts and checks
+uv sync --extra dev   # local Python environment
+make lint             # ruff + mypy
+make test             # pytest (PostgreSQL RLS tests skip unless TEST_ADMIN_DATABASE_URL and TEST_DATABASE_URL are set)
+make evals            # offline evaluation scorecard, including the adversarial corpus
+```
+
+Without a Cognito pool, the test suite exercises the identity behavior with synthetic tokens signed by keys generated at test time (`app/tests/identity.py`).
+
+### Full local stack
+
+Builds on the environment above. Also requires Docker and AWS credentials with access to the configured Bedrock generation and embedding models.
+
+```bash
 cp .env.example .env   # set BEDROCK_MODEL_ID, EMBEDDING_MODEL_ID and AWS_REGION
 make dev               # api + postgres/pgvector via docker compose
 make db-init           # extension, table, indexes, RLS policy, runtime role
@@ -206,12 +218,11 @@ Expected failure responses:
 - **401**, without a valid token.
 - **403**, when the groups don't map to exactly one allowed tenant and one role.
 
-Never paste real tokens into issues, logs or commits. Without a Cognito pool, the test suite exercises the identity behavior with synthetic tokens signed by keys generated at test time (`app/tests/identity.py`).
+Never paste real tokens into issues, logs or commits.
+
+Optional local observability:
 
 ```bash
-make lint    # ruff + mypy
-make test    # pytest (PostgreSQL RLS tests skip unless TEST_ADMIN_DATABASE_URL and TEST_DATABASE_URL are set)
-make evals   # offline evaluation scorecard
 docker compose -f docker-compose.yml -f docker-compose.observability.yml up --build   # optional local observability
 ```
 
@@ -249,7 +260,7 @@ synthetic-data/   Synthetic document corpus (no real data)
 
 ## Deployment readiness and residual risks
 
-**Engineering complete does not mean production ready.** Before any network-exposed deployment, these remain open ([M8 prerequisites](docs/security/M8_IDENTITY_EVIDENCE.md#deployment-prerequisites-open), [M7 deployment gate](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md#deployment-gate)):
+**Engineering complete does not mean production ready.** The project is not production deployed, and no AWS runtime is running. Before any network-exposed deployment, these remain open ([M8 prerequisites](docs/security/M8_IDENTITY_EVIDENCE.md#deployment-prerequisites-open), [M7 deployment gate](docs/security/M7_AI_SECURITY_EVIDENCE_INDEX.md#deployment-gate)):
 
 - **JWKS network path:**
   - ECS tasks run in private subnets with no NAT and no Cognito endpoint.
