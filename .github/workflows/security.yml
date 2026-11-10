@@ -40,7 +40,7 @@ jobs:
       # these files; every other path keeps full TruffleHog coverage.
       # The CLI image is pinned (the action defaults to "latest").
       - name: Secret scan with TruffleHog
-        uses: trufflesecurity/trufflehog@a7082b69f5bc6167bbe27ebab82bf6707f267bf6 # main pinned 2026-08-04
+        uses: trufflesecurity/trufflehog@221b979466938ce2cc6793c78905e1fe7e43c773 # main pinned 2026-08-04
         with:
           version: 3.99.8
           extra_args: --results=verified,unknown --exclude-paths=.github/trufflehog-exclude-paths.txt
